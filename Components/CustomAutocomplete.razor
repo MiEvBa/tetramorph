@@ -1,0 +1,248 @@
+@*
+    Custom autocomplete component that allows for both pre-defined lists & external search functions, and multi-selection w/ management
+    via chips. This component relies on JavaScript to move the chips container into the MudAutocomplete's input area at runtime.
+    The Razor page is solely for managing basic appearance and data flow, while the JavaScript file handles the more complex
+    showing/hiding of elements based on click and blur events.
+
+    NOTE: This component must be tested thoroughly with each MudBlazor update, as it relies on the MudAutocomplete's internal
+    structure to move the chips container into the input area. If the MudAutocomplete's internal structure changes, this component
+    may break and require updates.
+*@
+
+@using System.Threading
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+@typeparam T
+
+@if (MultiSelection)
+{
+    <!-- JavaScript initialization function will move this div into the MudAutocomplete's input area at runtime. -->
+    <div id="@($"{_autocompleteId}-chips")" class="@_chipsClass" style="z-index: 100;">
+        @foreach (var val in SelectedValues ?? Enumerable.Empty<T>())
+        {
+            if (!Readonly && !Disabled)
+            {
+                <MudChip Style="height: auto;" T="T" Size="Size.Small" @key="val" Text="@val?.ToString()" OnClose="@(chip => RemoveChip(chip))" />
+            }
+            else
+            {
+                <MudChip Style="height: auto;" T="T" Size="Size.Small" @key="val" Text="@val?.ToString()" />
+            }
+        }
+    </div>
+}
+
+<MudAutocomplete @ref="_autocomplete"
+                 Id="@_autocompleteId"
+                 T="T"
+                 CoerceValue="false"
+                 Clearable="@(MultiSelection == false)"
+                 Disabled="@Disabled"
+                 Immediate="true"
+                 Label="@Label"
+                 OnClearButtonClick="HandleClear"
+                 Placeholder="@(_isMultiAndHasValues ? "Введите значение" : null)"
+                 ReadOnly="@Readonly"
+                 SearchFunc="SearchItems"
+                 ToStringFunc="ToStringFunc"
+                 ShowProgressIndicator="true"
+                 ShrinkLabel="@_isMultiAndHasValues"
+                 Value="Value"
+                 ValueChanged="HandleValueChanged"
+                 Variant="Variant"
+                 Style="max-width: 200px"
+                 @attributes="AdditionalAttributes" />
+
+@code {
+    #region Parameters
+    /// <summary>
+    /// The label of the input field.
+    /// </summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>
+    /// Whether the autocomplete allows multiple selections.
+    /// </summary>
+    [Parameter] public bool MultiSelection { get; set; } = true;
+
+    /// <summary>
+    /// The variant of the input field.
+    /// </summary>
+    [Parameter] public Variant Variant { get; set; } = Variant.Text;
+
+    /// <summary>
+    /// The value of the input field. Should only be used when <see cref="MultiSelection"/> is false.
+    /// </summary>
+    [Parameter] public T? Value { get; set; }
+
+    /// <summary>
+    /// The selected values. Should only be used when <see cref="MultiSelection"/> is true.
+    /// </summary>
+    [Parameter] public IEnumerable<T>? SelectedValues { get; set; }
+
+    /// <summary>
+    /// The event that is fired when the value changes. Should only be used when <see cref="MultiSelection"/> is false.
+    /// </summary>
+    [Parameter] public EventCallback<T> ValueChanged { get; set; }
+
+    /// <summary>
+    /// The event that is fired when the selected values change. Should only be used when <see cref="MultiSelection"/> is true.
+    /// </summary>
+    [Parameter] public EventCallback<IEnumerable<T>> SelectedValuesChanged { get; set; }
+
+    /// <summary>
+    /// The preloaded items to display in the autocomplete dropdown. Items will be concatenated with the results from the <see cref="SearchFunc"/> function.
+    /// </summary>
+    [Parameter] public IEnumerable<T> PreloadedItems { get; set; } = Enumerable.Empty<T>();
+
+    /// <summary>
+    /// The function that searches for items based on the specified search text.
+    /// </summary>
+    [Parameter] public Func<string, Task<IEnumerable<T>>>? SearchFunc { get; set; }
+    [Parameter] public Func<T, string> ToStringFunc  { get; set; }
+
+
+
+    [Parameter] public bool Readonly { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object> AdditionalAttributes { get; set; } = new Dictionary<string, object>();
+    #endregion
+
+    #region Properties
+    private bool _isMultiAndHasValues => MultiSelection && SelectedValues is not null && SelectedValues.Any();
+    private bool _isMultiAndHasNoValues => MultiSelection && (SelectedValues is null || !SelectedValues.Any());
+
+    /// <summary>
+    /// Determines the class of the chips container based on the variant and whether the div has items.
+    /// </summary>
+    private string _chipsClass
+    {
+        get
+        {
+            if (_isMultiAndHasNoValues)
+                return "d-none";
+
+            var classString = "d-flex flex-wrap ";
+
+            classString += Variant switch
+            {
+                Variant.Filled => "pt-6 pb-1 px-1",
+                Variant.Outlined => "pt-2 pb-1 px-1",
+                Variant.Text => "py-1",
+                _ => string.Empty
+            };
+
+            return classString;
+        }
+    }
+    #endregion
+
+    #region Fields
+    private string _autocompleteId = $"autocomplete-{Guid.NewGuid()}";
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _instance;
+    private MudAutocomplete<T>? _autocomplete;
+    #endregion
+
+    #region Lifecycle Methods
+    /// <summary>
+    /// Lifecycle method called after the component has rendered.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && MultiSelection)
+        {
+            _module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./Components/CustomAutocomplete.razor.js");
+            _instance = await _module.InvokeAsync<IJSObjectReference>("getCustomAutocompleteInstance");
+            await _instance.InvokeVoidAsync("initialize", _autocompleteId);
+        }
+    }
+
+    /// <summary>
+    /// Disposes of the JS module and instance.
+    /// </summary>
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (_instance != null)
+        {
+            await _instance.InvokeVoidAsync("dispose", _autocompleteId);
+            await _instance.DisposeAsync();
+        }
+        if (_module != null)
+        {
+            await _module.DisposeAsync();
+        }
+    }
+    #endregion
+
+    #region Event Handlers
+    /// <summary>
+    /// Handles the MudAutocomplete input clear button click event.
+    /// </summary>
+    private void HandleClear()
+    {
+        if (MultiSelection)
+        {
+            SelectedValues = Enumerable.Empty<T>();
+            SelectedValuesChanged.InvokeAsync(SelectedValues);
+        }
+        else
+        {
+            Value = default;
+            ValueChanged.InvokeAsync(Value);
+        }
+
+        _autocomplete?.CloseMenuAsync();
+        _autocomplete?.BlurAsync();
+    }
+
+    /// <summary>
+    /// Handles the MudAutocomplete value changed event.
+    /// </summary>
+    private void HandleValueChanged(T value)
+    {
+        if (MultiSelection)
+        {
+            if (value != null && !(SelectedValues ?? Enumerable.Empty<T>()).Contains(value))
+            {
+                var newValues = new List<T>(SelectedValues ?? Enumerable.Empty<T>()) { value };
+                SelectedValuesChanged.InvokeAsync(newValues);
+            }
+        }
+        else
+        {
+            ValueChanged.InvokeAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// Removes the specified chip.
+    /// </summary>
+    private void RemoveChip(MudChip<T> chip)
+    {
+        var newValues = (SelectedValues ?? Enumerable.Empty<T>()).Where(x => x?.ToString() != chip.Text).ToList();
+        SelectedValuesChanged.InvokeAsync(newValues);
+    }
+    #endregion
+
+    #region Helper Methods
+    /// <summary>
+    /// Searches for items based on the specified search text.
+    /// </summary>
+    private async Task<IEnumerable<T>> SearchItems(string searchText, CancellationToken cancellationToken)
+    {
+        var results = string.IsNullOrEmpty(searchText)
+            ? PreloadedItems.Except(SelectedValues ?? Enumerable.Empty<T>())
+            : PreloadedItems.Where(item => (item?.ToString() ?? string.Empty).Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+        if (SearchFunc != null)
+        {
+            var externalResults = await SearchFunc(searchText);
+            results = results.Concat(externalResults).Distinct();
+        }
+
+        return results.Except(SelectedValues ?? Enumerable.Empty<T>());
+    }
+    #endregion
+}

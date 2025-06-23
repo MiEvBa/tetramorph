@@ -1,0 +1,47 @@
+@using System.Runtime.CompilerServices
+@using Heron.MudCalendar.Services
+@using Microsoft.AspNetCore.Components.Rendering
+@using MudBlazor.Extensions
+@using MudBlazor.Utilities
+
+@inherits DayWeekViewBaseEx;
+
+@Render
+
+@code {
+
+    protected override int DaysInView => 1;
+
+    protected override List<CalendarCell> BuildCells()
+    {
+        CalendarCell calendarCell = new CalendarCell()
+        {
+            Date = this.Calendar.CurrentDay.Date
+        };
+        if (this.Calendar.CurrentDay.Date == DateTime.Today)
+            calendarCell.Today = true;
+        calendarCell.Items = Calendar.Items.Where((Func<CalendarItem, bool>)(i =>
+        {
+            if (i.Start.Date == this.Calendar.CurrentDay)
+                return true;
+            if (i.Start.Date <= this.Calendar.CurrentDay)
+            {
+                DateTime? end = i.End;
+                if (end.HasValue)
+                {
+                    end = i.End;
+                    return end.Value > this.Calendar.CurrentDay;
+                }
+            }
+
+            return false;
+        })).OrderBy((Func<CalendarItem, DateTime>)(i => i.Start)).ToList();
+        return new List<CalendarCell>() { calendarCell };
+    }
+
+    protected override RenderFragment<CalendarItem> CellTemplate
+    {
+        get => Calendar.DayTemplate ?? Calendar.CellTemplate;
+    }
+
+}

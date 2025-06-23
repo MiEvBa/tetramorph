@@ -1,0 +1,384 @@
+using System.ComponentModel;
+using System.Reflection;
+using Heron.MudCalendar.Services;
+using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
+using MudBlazor;
+using MudBlazor.Extensions;
+using MudBlazor.Utilities;
+using Tetramorph.Doctor.Components;
+
+namespace Heron.MudCalendar;
+
+public abstract partial class DayWeekViewBaseEx : CalendarViewBaseEx, IDisposable
+{
+    private ElementReference _scrollDiv;
+    private JsService? _jsService;
+
+    private const int MinutesInDay = 24 * 60;
+    private int PixelsInCell => Calendar.DayCellHeight;
+
+    private int CellsInDay => MinutesInDay / (int)Calendar.DayTimeInterval;
+    private int PixelsInDay => CellsInDay * PixelsInCell;
+
+    protected virtual int DaysInView => 7;
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender)
+        {
+            await ScrollToDay();
+        }
+    }
+
+    /// <summary>
+    /// Styles the header grid
+    /// </summary>
+    protected virtual string HeaderClass =>
+        CssBuilder.Default("mud-cal-grid")
+            .AddClass("mud-cal-grid-header")
+            .AddClass("mud-cal-week-header", DaysInView == 7)
+            .AddClass("mud-cal-work-week-header", DaysInView == 5)
+            .AddClass("mud-cal-day-header", DaysInView == 1)
+            .Build();
+
+    /// <summary>
+    /// Styles the main grid
+    /// </summary>
+    protected virtual string GridClass =>
+        CssBuilder.Default("mud-cal-grid")
+            .AddClass("mud-cal-week-grid", DaysInView == 7)
+            .AddClass("mud-cal-work-week-grid", DaysInView == 5)
+            .AddClass("mud-cal-day-grid", DaysInView == 1)
+            .Build();
+
+    /// <summary>
+    /// Styles added to each day.
+    /// </summary>
+    /// <param name="calendarCell">The cell.</param>
+    /// <param name="row">The current row in the table being rendered.</param>
+    /// <returns></returns>
+    protected virtual string DayStyle(CalendarCell calendarCell, int row)
+    {
+        return StyleBuilder.Empty()
+            .AddStyle("border-left", $"1px solid var(--mud-palette-{ToDescriptionString(Calendar.Color)})", calendarCell.Today && Calendar.HighlightToday)
+            .AddStyle("border-right", $"1px solid var(--mud-palette-{ToDescriptionString(Calendar.Color)})", calendarCell.Today && Calendar.HighlightToday)
+            .AddStyle("border-top", $"1px solid var(--mud-palette-{ToDescriptionString(Calendar.Color)})", row == 0 && calendarCell.Today && Calendar.HighlightToday)
+            .AddStyle("border-bottom", $"1px solid var(--mud-palette-{ToDescriptionString(Calendar.Color)})", row + 1 == CellsInDay && calendarCell.Today && Calendar.HighlightToday)
+            .Build();
+    }
+
+    /// <summary>
+    /// Styles the position and height of the div containing an item.
+    /// </summary>
+    /// <param name="position">Position information for the div.</param>
+    /// <returns></returns>
+    protected virtual string EventStyle(ItemPosition position)
+    {
+        return StyleBuilder.Empty()
+            .AddStyle("position", "absolute")
+            .AddStyle("top", $"{position.Top}px")
+            .AddStyle("height", $"{position.Height}px")
+            .AddStyle("overflow", "hidden")
+            .AddStyle("left", (((position.Position / (double)position.Total) - (1.0 / position.Total)) * 100).ToInvariantString() + "%")
+            .AddStyle("width", (100d / position.Total).ToInvariantString() + "%" )
+            .Build();
+    }
+
+    /// <summary>
+    /// Styles for the cell where the time is displayed..
+    /// </summary>
+    /// <param name="row">The row being styled.</param>
+    /// <returns></returns>
+    protected virtual string TimeCellClassname(int row)
+    {
+        return CssBuilder.Empty()
+            .AddClass("mud-cal-week-cell", IsHourCell(row))
+            .AddClass("mud-cal-time-cell", IsHourCell(row))
+            .AddClass("mud-cal-week-not-today")
+            .Build();
+    }
+
+    /// <summary>
+    /// Styles for each cell in the view.
+    /// </summary>
+    /// <param name="cell">The cell being styled.</param>
+    /// <param name="row">The row being styled.</param>
+    /// <returns></returns>
+    protected virtual string DayCellClassname(CalendarCell cell, int row)
+    {
+        return CssBuilder.Empty()
+            .AddClass("mud-cal-week-cell")
+            .AddClass("mud-cal-week-cell-half", !IsHourCell(row))
+            .AddClass("mud-cal-week-not-today", !cell.Today || !Calendar.HighlightToday)
+            .Build();
+    }
+
+    /// <summary>
+    /// Styles that set the height of each cell.
+    /// </summary>
+    /// <returns></returns>
+    protected virtual string CellHeightStyle()
+    {
+        return StyleBuilder.Empty()
+            .AddStyle("height", $"{Calendar.DayCellHeight}px")
+            .Build();
+    }
+
+    /// <summary>
+    /// The style of the line showing the current time.
+    /// </summary>
+    /// <returns></returns>
+    protected virtual string TimelineStyle()
+    {
+        return StyleBuilder.Empty()
+            .AddStyle("position", "absolute")
+            .AddStyle("width", "100%")
+            .AddStyle("border", "1px solid var(--mud-palette-gray-default)")
+            .AddStyle("top", $"{TimelinePosition().ToInvariantString()}px")
+            .Build();
+    }
+
+    /// <summary>
+    /// Method invoked when the user clicks on the hyper link in the cell.
+    /// </summary>
+    /// <param name="cell">The cell that was clicked.</param>
+    /// <param name="row">The row that was clicked.</param>
+    /// <returns></returns>
+    protected virtual Task OnCellLinkClicked(CalendarCell cell, int row)
+    {
+        var date = cell.Date.AddMinutes(row * (int)Calendar.DayTimeInterval);
+        return Calendar.CellClicked.InvokeAsync(date);
+    }
+    
+    /// <summary>
+    /// Method invoked when the user clicks on the calendar item.
+    /// </summary>
+    /// <param name="item">The calendar item that was clicked.</param>
+    /// <returns></returns>
+    protected virtual Task OnItemClicked(CalendarItem item)
+    {
+        return Calendar.ItemClicked.InvokeAsync(item);
+    }
+    
+    /// <summary>
+    /// Creates a string with the time to be displayed.
+    /// </summary>
+    /// <param name="row">The current row in the table.</param>
+    /// <returns></returns>
+    protected virtual string DrawTime(int row)
+    {
+        var hour = row / (60.0 / (double)Calendar.DayTimeInterval);
+        var timeSpan = TimeSpan.FromHours(hour);
+        var time = TimeOnly.FromTimeSpan(timeSpan);
+        
+        return Calendar.Use24HourClock ? time.ToString("HH:mm") : time.ToString("h tt");
+    }
+    
+    protected int TimelineRow()
+    {
+        var minutes = DateTime.Now.Subtract(DateTime.Today).TotalMinutes;
+        var row = (int)Math.Floor(minutes / (int)Calendar.DayTimeInterval);
+
+        return row;
+    }
+
+    private double TimelinePosition()
+    {
+        var minutes = DateTime.Now.Subtract(DateTime.Today).TotalMinutes - (TimelineRow() * (int)Calendar.DayTimeInterval);
+        var position = (minutes / (int)Calendar.DayTimeInterval) * Calendar.DayCellHeight;
+
+        return position;
+    }
+
+    protected Task ItemHeightChanged(CalendarItem item, int newHeight)
+    {
+        // Calculate end time from height
+        var minutes = (newHeight / (double)PixelsInDay) * MinutesInDay;
+        item.End = item.Start.AddMinutes(minutes);
+
+        return Calendar.ItemChanged.InvokeAsync(item);
+    }
+
+    private int CalcTop(ItemPosition position)
+    {
+        double minutes = 0;
+        if (DateOnly.FromDateTime(position.Item.Start.Date) == position.Date)
+        {
+            minutes = position.Item.Start.Hour * 60 + position.Item.Start.Minute;
+        }
+
+        var percent = minutes / MinutesInDay;
+        var top = PixelsInDay * percent;
+
+        return (int)Math.Round(top);
+    }
+
+    private int CalcHeight(ItemPosition position)
+    {
+        double start = 0;
+        if (DateOnly.FromDateTime(position.Item.Start.Date) == position.Date)
+        {
+            start = position.Item.Start.Hour * 60 + position.Item.Start.Minute;
+        }
+
+        var end = start + 60;
+        if (position.Item.End.HasValue)
+        {
+            end = MinutesInDay;
+            if (DateOnly.FromDateTime(position.Item.End.Value.Date) == position.Date)
+            {
+                end = position.Item.End.Value.Hour * 60 + position.Item.End.Value.Minute;
+            }
+        }
+
+        if (end > MinutesInDay) end = MinutesInDay;
+        var minutes = end - start;
+        var percent = minutes / MinutesInDay;
+        var height = PixelsInDay * percent;
+
+        if (height < Calendar.DayItemMinHeight)
+        {
+            height = Calendar.DayItemMinHeight;
+        }
+
+        return (int)Math.Round(height);
+    }
+
+    private async Task ScrollToDay()
+    {
+        var startMinutes = (Calendar.DayStartTime.Hour * 60) + Calendar.DayStartTime.Minute;
+        var percent = (double)startMinutes / MinutesInDay;
+        var scrollTo = PixelsInDay * percent;
+
+        await JsRuntime.InvokeVoidAsync("scrollToEx", (object) _scrollDiv, (object) scrollTo);
+    }
+    
+    internal static string ToDescriptionString(Enum value)
+    {
+        FieldInfo field = value.GetType().GetField(value.ToString());
+        if ((object) field == null)
+            return value.ToString().ToLower();
+        Attribute[] customAttributes = Attribute.GetCustomAttributes((MemberInfo) field, typeof (DescriptionAttribute), false);
+        return !(customAttributes is DescriptionAttribute[] descriptionAttributeArray) || customAttributes.Length <= 0 ? value.ToString().ToLower() : descriptionAttributeArray[0].Description;
+    }
+
+    protected virtual RenderFragment<CalendarItem> CellTemplate => Calendar.CellTemplate;
+
+    private IEnumerable<ItemPosition> CalcPositions(IEnumerable<CalendarItem> items, DateOnly date)
+    {
+        var positions = new List<ItemPosition>();
+        var overlaps = new List<ItemPosition>();
+        foreach (var item in items)
+        {
+            // Check that the end date is valid
+            if (item.End.HasValue && item.End <= item.Start)
+            {
+                throw new ApplicationException("End date of calendar item must be after start date");
+            }
+
+            // Create new position object
+            var position = new ItemPosition { Item = item, Position = 0, Total = overlaps.Count + 1, Date = date };
+            position.Top = CalcTop(position);
+            position.Height = CalcHeight(position);
+            if (position.Bottom > PixelsInDay)
+            {
+                position.Height = PixelsInDay - position.Top;
+            }
+            
+            // Remove overlaps that are not relevant
+            overlaps.RemoveAll(o => o.Bottom <= position.Top);
+            positions.Add(position);
+
+            // Calculate the position
+            for (var i = 1; i <= overlaps.Count; i++)
+            {
+                if (overlaps.Any(o => o.Position == i) == false)
+                {
+                    position.Position = i;
+                }
+            }
+
+            if (position.Position == 0) position.Position = overlaps.Count + 1;
+
+            overlaps.Add(position);
+            var maxPosition = overlaps.Max(o => o.Position);
+            foreach (var overlap in overlaps)
+            {
+                overlap.Total = maxPosition;
+            }
+        }
+
+        // Calculate the total overlapping events
+        foreach (var position in positions)
+        {
+            var max = positions.Where(p => p.Top < position.Bottom && p.Bottom > position.Top).Max(p => p.Total);
+
+            if (max > position.Total)
+            {
+                position.Total = max;
+                
+                // Need to update overlapping events
+                var overlappingPositions = positions.Where(p => p.Top < position.Bottom && p.Bottom > position.Top);
+                foreach (var overlappedPosition in overlappingPositions)
+                {
+                    if (overlappedPosition.Total < max)
+                    {
+                        overlappedPosition.Total = max;
+                    }
+                }
+            }
+        }
+
+        return positions;
+    }
+    
+    private async Task ItemDropped(MudItemDropInfo<CalendarItem> dropItem)
+    {
+        if (dropItem.Item == null) return;
+        var item = dropItem.Item;
+        var duration = item.End?.Subtract(item.Start) ?? TimeSpan.Zero;
+        
+        var ids = dropItem.DropzoneIdentifier.Split("_");
+        if (!DateTime.TryParse(ids[0], out var date)) return;
+        var cell = int.Parse(ids[1]);
+        var minutes = ((double)cell / CellsInDay) * MinutesInDay;
+        date = date.AddMinutes(minutes);
+        
+        // Update start and end time
+        item.Start = date;
+        if (item.End.HasValue)
+        {
+            item.End = item.Start.Add(duration);
+        }
+        
+        Calendar.Refresh();
+
+        await Calendar.ItemChanged.InvokeAsync(item);
+    }
+
+    private bool IsHourCell(int row)
+    {
+        return (int)Calendar.DayTimeInterval >= 60 || row % (60 / (int)Calendar.DayTimeInterval) == 0;
+    }
+
+    protected class ItemPosition
+    {
+        public CalendarItem Item { get; set; } = new();
+        public int Position { get; set; }
+        public int Total { get; set; }
+        public DateOnly Date { get; set; }
+        public int Top { get; set; }
+        public int Height { get; set; }
+        public int Bottom => Top + Height;
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+
+        _jsService?.Dispose();
+    }
+}

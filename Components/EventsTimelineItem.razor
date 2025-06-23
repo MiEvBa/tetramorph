@@ -1,0 +1,101 @@
+@using System.Globalization
+@using Tetramorph.Doctor.Models
+<MudTimelineItem Color="@EventData.GetInfoColor()" TimelineAlign="TimelineAlign.End" Variant="Variant.Filled">
+    <ItemOpposite>
+        <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h5">@EventData.Date.ToString("dd.MM.yyyy HH:mm", new CultureInfo("ru-RU"))</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="EditEvent"/>
+    </ItemOpposite>
+
+    <ItemContent>
+        @switch (@EventData.EventType)
+        {
+            case TypeofEvent.Analysis:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Анализы</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Ссылки на анализы:
+                    <br/>
+                    @foreach (var link in @EventData.Urls)
+                    {
+                        <MudLink Href="@link">@link</MudLink>
+                        <br/>
+                    }
+                </MudText>
+                break;
+            case TypeofEvent.Note:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Заметка</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break;
+            case TypeofEvent.Consultation:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Консультация</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break; 
+            case TypeofEvent.ProlongInjection:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Инъекция пролонга</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Пролонг:
+                    @foreach (var drug in @EventData.Drugs)
+                    {
+                        <MudText Typo="Typo.subtitle1" Inline="false" GutterBottom="true">@drug.ToString()</MudText>
+                    }
+                </MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break;
+            case TypeofEvent.StartTakingDrugs:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Новые лекарства</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Начало приёма:
+                    @foreach (var drug in @EventData.Drugs)
+                    {
+                        <MudText Typo="Typo.subtitle1" Inline="false" GutterBottom="true">@drug.ToString()</MudText>
+                    }
+                </MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break;
+            case TypeofEvent.DosageChange:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Смена дозировки</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Смена дозировки:
+                    @foreach (var drug in @EventData.Drugs)
+                    {
+                        <MudText Typo="Typo.subtitle1" Inline="false" GutterBottom="true">@drug.ToString()</MudText>
+                    }
+                </MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break;
+            case TypeofEvent.EndTakingDrugs:
+                <MudText Color="@EventData.GetInfoColor()" Typo="Typo.h6" GutterBottom="true">Отмена лекарства</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">@Clients.First(var => var.Id == EventData.ClientId).ToString()</MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Конец приёма:
+                    @foreach (var drug in @EventData.Drugs)
+                    {
+                        <MudText Typo="Typo.subtitle1" Inline="false" GutterBottom="true">@drug.ToString()</MudText>
+                    }
+                </MudText>
+                <MudText Typo="Typo.h6" GutterBottom="true">Записка:<MudText Typo="Typo.subtitle1" Inline="false">@((MarkupString)EventData.Note.ReplaceLineEndings("<br/>"))</MudText></MudText>
+                break;
+        }
+        <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @onclick="UpdateState" @bind-Value="@EventData.State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+            <MudToggleItem Value="@(State.Planned)">
+                Запланировано
+            </MudToggleItem>
+            <MudToggleItem Value="@(State.Done)">
+                Завершено
+            </MudToggleItem>
+            <MudToggleItem Value="@(State.Cancelled)">
+                Отменено
+            </MudToggleItem>
+        </MudToggleGroup>
+
+    </ItemContent>
+</MudTimelineItem>
+
+
+@code {
+    [Parameter] public ClientEvent EventData { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> UpdateState { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> EditEvent { get; set; }
+    [Parameter] public List<ClientData> Clients { get; set; }
+}

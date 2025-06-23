@@ -1,0 +1,107 @@
+@using BlazorDexie.Database
+@using Tetramorph.Doctor.Database.Models
+
+<MudGrid>
+    <MudItem xs="3">
+        <MudAutocomplete T="Drug"
+                         Disabled="@(Type != DrugInputType.All)"
+                         Label="Наименование"
+                         Variant="Variant.Outlined"
+                         ToStringFunc="@(e => $"{e.Name}")"
+                         ValueChanged="OnDrugChanged"
+                         Value="@CurrentDrug"
+                         SearchFunc="@DrugSearchFunction"/>
+    </MudItem>
+    <MudItem xs="3">
+        <MudAutocomplete T="string"
+                         Label="Дозировка"
+                         Disabled="@(Type == DrugInputType.None)"
+                         Variant="Variant.Outlined"
+                         @bind-Value="@Data.Dosage"
+                         SearchFunc="@DosageSearchFunction"/>
+    </MudItem>
+    <MudItem xs="2">
+        <MudNumericField @bind-Value="@Data.Count" Label="Количество" Disabled="@(Type == DrugInputType.None)" Variant="Variant.Outlined" Min="1" Max="100"/>
+    </MudItem>
+    <MudItem xs="3">
+        <MudSelect @bind-Value="Data.TimeToTake" Disabled="@(Type == DrugInputType.None)" T="DrugsInput.DrugInputDataTakeTime" ToStringFunc="ToStringFunc" Label="Время приёма" Variant="Variant.Outlined">
+            <MudSelectItem Value="DrugsInput.DrugInputDataTakeTime.Morning"/>
+            <MudSelectItem Value="DrugsInput.DrugInputDataTakeTime.Day"/>
+            <MudSelectItem Value="DrugsInput.DrugInputDataTakeTime.Evening"/>
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="1" Class="align-self-center">
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" @onclick="OnDelete" aria-label="delete" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter] public DrugsInput.DrugInputData? Data { get; set; }
+    [Parameter] public Store<Drug, int> Drugs { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnDelete { get; set; }
+
+    [Parameter] public DrugInputType Type { get; set; }
+
+    public Drug CurrentDrug { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Data != null)
+        {
+            CurrentDrug = (await Drugs.Where("id").IsEqual(Data.Id).Limit(1).ToList()).First();
+        }
+    }
+
+    private void OnDrugChanged(Drug drug)
+    {
+        CurrentDrug = drug;
+        Data = new DrugsInput.DrugInputData() { Id = drug.Id, Name = drug.Name, Dosage = drug.Dosage.First(), Count = 1, TimeToTake = DrugsInput.DrugInputDataTakeTime.Evening };
+    }
+
+    private Task<IEnumerable<Drug>> DrugSearchFunction(string text, CancellationToken token)
+    {
+        return Task.Run(async () =>
+        {
+            var result = await Drugs.Where("UpName").StartsWith(text.ToUpper()).Limit(10).ToList();
+            result.Add(new Drug() { Id = -1, UpName = text.ToUpper(), Name = text, Dosage = new []{ "Дозировка" }});
+            return result.Where(v=>true);
+        });
+    }
+
+    private Task<IEnumerable<string>> DosageSearchFunction(string text, CancellationToken token)
+    {
+        return Task.Run(() =>
+        {
+            var result = CurrentDrug.Dosage.Where(var => var.Contains(text)).ToList();
+            if (!result.Contains(text))
+            {
+                result.Add(text);
+            }
+            return result.Where(v=>true);
+        });
+    }
+    
+    public enum DrugInputType
+    {
+        All,
+        Dosage,
+        None
+    }
+
+    private string ToStringFunc(DrugsInput.DrugInputDataTakeTime arg)
+    {
+        switch (arg)
+        {
+            case DrugsInput.DrugInputDataTakeTime.Morning:
+                return "Утром";
+            case DrugsInput.DrugInputDataTakeTime.Day:
+                return "Днём";
+            case DrugsInput.DrugInputDataTakeTime.Evening:
+                return "Вечером";
+            case DrugsInput.DrugInputDataTakeTime.Week:
+                return "Еженедельно";
+        } 
+        return "Нет информации";
+    }
+
+}

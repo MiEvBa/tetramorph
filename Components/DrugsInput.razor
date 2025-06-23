@@ -1,0 +1,98 @@
+@using BlazorDexie.Database
+@using Tetramorph.Doctor.Database.Models
+
+<MudText Typo="Typo.h6">@Label</MudText>
+<br/>
+@foreach (var drug in Data)
+{
+    <DrugInput Type="Type" Drugs="Drugs" Data="@drug" OnDelete="@(()=>DeleteDrug(@drug))" />
+    <br/>
+}
+
+@if (Type == DrugInput.DrugInputType.All)
+{
+    <br/>
+    <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PlusOne" Color="Color.Primary" @onclick="AddDrug" Size="Size.Small">Добавить лекарство</MudButton>
+}
+else
+{
+    <br/>
+    <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Refresh" Color="Color.Primary" @onclick="Refresh" Size="Size.Small">Сбросить</MudButton>
+}
+<br/>
+
+@code {
+    [Parameter] public string? Label { get; set; } = "Лекарства";
+    [Parameter] public List<DrugInputData>? Data { get; set; } = new();
+    [Parameter] public Store<Drug, int> Drugs { get; set; }
+
+    [Parameter] public DrugInput.DrugInputType Type { get; set; }
+
+    private List<DrugInputData>? OriginalData = new();
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        OriginalData = Data?.ToList();
+    }
+    
+    private async void AddDrug()
+    {
+        Data ??= new List<DrugInputData>();
+
+        var first = (await Drugs.Where("Id").IsEqual(1).ToList()).First();
+        Data.Add(new DrugInputData() { Id = first.Id, Name = first.Name, Dosage = first.Dosage.First(), Count = 1, TimeToTake = DrugInputDataTakeTime.Morning });
+        OriginalData.Add(Data.Last());
+        this.StateHasChanged();
+    }
+    
+    
+    private void DeleteDrug(DrugInputData drug)
+    {
+        Data.Remove(drug);
+        this.StateHasChanged();
+    }
+    
+    private void Refresh()
+    {
+        Data = OriginalData?.ToList();
+    }
+
+    public class DrugInputData
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Dosage { get; set; }
+        public int Count { get; set; }
+        public DrugInputDataTakeTime TimeToTake { get; set; }
+
+        public override string ToString()
+        {
+            return Name + " " + Dosage + " X" + Count + " " + ToStringFunc(TimeToTake);
+        }
+        
+        private string ToStringFunc(DrugInputDataTakeTime arg)
+        {
+            switch (arg)
+            {
+                case DrugsInput.DrugInputDataTakeTime.Morning:
+                    return "Утром";
+                case DrugsInput.DrugInputDataTakeTime.Day:
+                    return "Днём";
+                case DrugsInput.DrugInputDataTakeTime.Evening:
+                    return "Вечером";
+                case DrugsInput.DrugInputDataTakeTime.Week:
+                    return "Еженедельно";
+            } 
+            return "Нет информации";
+        }
+    }
+    
+    public enum DrugInputDataTakeTime
+    {
+        Morning, 
+        Day,
+        Evening,
+        Week
+    }
+}

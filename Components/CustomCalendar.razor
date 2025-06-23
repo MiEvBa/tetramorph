@@ -1,0 +1,95 @@
+@inherits MudComponentBase
+@using Heron.MudCalendar.Attributes
+@using Microsoft.JSInterop
+@using Tetramorph.Doctor.Components
+@using CategoryTypes = Heron.MudCalendar.Attributes.CategoryTypes
+@inject IJSRuntime JsRuntime
+
+@Render
+
+@code {
+
+    /// <summary>
+    /// Renders the component.
+    /// </summary>
+    protected virtual RenderFragment Render => __builder =>
+    {
+        <CascadingValue IsFixed="false" Value="this">
+            <div class="@Classname" style="@Styles">
+
+                <div class="d-flex flex-column mud-height-full">
+                    @RenderToolbar
+
+                    <div class="@ViewClassname">
+                        @switch (View)
+                        {
+                            case CalendarView.Day:
+                                @RenderDayView
+                                break;
+                            case CalendarView.Week:
+                                @RenderWeekView
+                                break;
+                            case CalendarView.WorkWeek:
+                                @RenderWorkWeekView
+                                break;
+                            case CalendarView.Month:
+                            default:
+                                @RenderMonthView
+                                break;
+                        }
+                    </div>
+                </div>
+            </div>
+        </CascadingValue>
+    };
+
+    /// <summary>
+    /// Defines the cell content for the Calendar.  Can be overriden for different Views by defining DayTemplate, WeekTemplate and MonthTemplate.
+    /// </summary>
+    [Heron.MudCalendar.Attributes.Category(CategoryTypes.Calendar.Template)]
+    [Parameter]
+    public RenderFragment<CalendarItem> CellTemplate { get; set; } =
+        calendarItem =>
+            @<div class="mud-cal-cell-template">
+                <MudChip T="string" Label="true" Color="Color.Primary" Class="mud-cal-cell-template-chip">@calendarItem.Text</MudChip>
+            </div>;
+
+    /// <summary>
+    /// Renders the toolbar of the component including prev/next buttons, date picker and view switcher.
+    /// </summary>
+    protected virtual RenderFragment RenderToolbar =>
+        @<div class="mud-cal-toolbar pa-4">
+            <div class="d-flex align-center">
+                @if (ShowPrevNextButtons)
+                {
+                    <MudIconButton Variant="@ButtonVariant" Icon="@Icons.Material.Outlined.ChevronLeft" Color="@Color" OnClick="OnPreviousClicked" Class="mx-1"/>
+                    <MudIconButton Variant="@ButtonVariant" Icon="@Icons.Material.Outlined.ChevronRight" Color="@Color" OnClick="OnNextClicked" Class="mr-1"/>
+                }
+                @if (ShowDatePicker)
+                {
+                    <CalendarDatePicker @ref="_datePicker" OpenTo="@(View == CalendarView.Month ? OpenTo.Month : OpenTo.Date)" FirstDayOfWeek="@GetFirstDayOfWeekByCalendarView(View)" FixDay="@(View == CalendarView.Month ? PickerDate?.Day : null)" Date="PickerDate" DateChanged="DatePickerDateChanged" View="View" Variant="ButtonVariant" Color="Color" Class="mx-1" PickerOpened="OnDatePickerOpened"/>
+                }
+                @if (ShowTodayButton)
+                {
+                    <MudButton Variant="@ButtonVariant" Color="@Color" OnClick="OnTodayClicked" Class="mx-1">@DrawTodayText()</MudButton>
+                }
+                @if (ToolbarContent != null)
+                {
+                    @ToolbarContent
+                }
+            </div>
+            <div>
+                <EnumSwitch Value="@View" T="CalendarView" Color="@Color" AllowedValues="AllowedViews()" ValueChanged="OnViewChanging"/>
+            </div>
+        </div>;
+
+    protected virtual RenderFragment RenderMonthView => @<CustomMonthView/>;
+
+    protected virtual RenderFragment RenderDayView => @<CustomDayView/>;
+
+    protected virtual RenderFragment RenderWorkWeekView => @<CustomWeekView/>;
+
+    protected virtual RenderFragment RenderWeekView => @<CustomWeekView/>;
+
+
+}
