@@ -1,0 +1,305 @@
+@using System.Threading
+@using BlazorDexie.Database
+@using Tetramorph.Doctor.Models
+@using BlazorInputTags
+@using Tetramorph.Doctor.Database.Models
+@using Tetramorph.Doctor.Components
+
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudAutocomplete T="ClientData"
+                            Label="Клиент"
+                            Variant="Variant.Outlined"
+                            @bind-Value="@selectedClient"
+                            ToStringFunc="@(e => $"№{e.CardNumber} - {e.Name}")"
+                            SearchFunc="@ClientsSearchFunction"/>
+        <br/>
+        <MudSelect @bind-Value="EventType" T="TypeofEvent" ToStringFunc="ToStringFunc" Disabled="@(selectedClient == null)" Label="Тип события" Variant="Variant.Outlined">
+            <MudSelectItem Value="TypeofEvent.Consultation"/>
+            <MudSelectItem Value="TypeofEvent.StartTakingDrugs"/>
+            <MudSelectItem Value="TypeofEvent.DosageChange"/>
+            <MudSelectItem Value="TypeofEvent.EndTakingDrugs"/>
+            <MudSelectItem Value="TypeofEvent.Analysis"/>
+            <MudSelectItem Value="TypeofEvent.ProlongInjection"/>
+            <MudSelectItem Value="TypeofEvent.Note"/>
+        </MudSelect>
+        <br/>
+        <MudDatePicker Label="Дата события" Editable="true" @bind-Date="Date" Mask="@(new DateMask("00-00-0000"))" DateFormat="dd-MM-yyyy" Placeholder="01.01.2024"/>
+        <br/>
+        <MudTimePicker Label="Время события" Editable="true" AmPm="false" @bind-Time="Time" Placeholder="16:00"/>
+        <br/>
+        @switch(EventType)
+        {
+            case TypeofEvent.Consultation:
+                
+            break;
+            case TypeofEvent.StartTakingDrugs:
+                <DrugsInput Type="DrugInput.DrugInputType.All" Label="Лекарства" Drugs="AllDrugs" Data="ResultDrugs" />
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+            break;
+            case TypeofEvent.DosageChange:
+                <DrugsInput Type="DrugInput.DrugInputType.Dosage" Label="Лекарства" Drugs="AllDrugs" Data="ResultDrugs" />
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.EndTakingDrugs:
+                <DrugsInput Type="DrugInput.DrugInputType.None" Label="Какие лекарства перестать принимать?" Drugs="AllDrugs" Data="ResultDrugs" />
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.Analysis:
+                <InputTags Value="Urls" Options="@TagsOptions" Label="Ссылки на анализы" />
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.ProlongInjection:
+                <DrugsInput Type="DrugInput.DrugInputType.None" Label="Какой пролонг?" Drugs="AllDrugs" Data="ResultDrugs" />
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.Note:
+                
+                break;
+        }
+        <br/>
+        <MudTextField @bind-Value="Note" Lines="8" Label="Заметка" Variant="Variant.Text"/>
+        <br/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="Submit">Добавить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public List<ClientData> Clients { get; set; } = new List<ClientData>();
+
+    [Parameter] public ClientData? selectedClient { get; set; }
+    
+    [Parameter]  public List<ClientEvent> Events { get; set; } = new List<ClientEvent>();
+    
+    private TypeofEvent _EventType;
+    public TypeofEvent EventType
+    {
+        get { return _EventType; }
+        set
+        {
+            _EventType = value;
+            switch (value)
+            {
+                case TypeofEvent.Consultation:
+                    ResultDrugs = new List<DrugsInput.DrugInputData>();
+                    break;
+                case TypeofEvent.StartTakingDrugs:
+                    ResultDrugs = new List<DrugsInput.DrugInputData>();
+                    break;
+                case TypeofEvent.DosageChange:
+                    ResultDrugs = GetCurrentDrugs();
+                    break;
+                case TypeofEvent.EndTakingDrugs:
+                    ResultDrugs = GetCurrentDrugs();
+                    break;
+                case TypeofEvent.Analysis:
+                    ResultDrugs = new List<DrugsInput.DrugInputData>();
+                    break;
+                case TypeofEvent.ProlongInjection:
+                    ResultDrugs = GetCurrentDrugs();
+                    break;
+                case TypeofEvent.Note:
+                    ResultDrugs = new List<DrugsInput.DrugInputData>();
+                    break;
+            }
+            
+            this.StateHasChanged();
+        }
+    }
+
+    private List<DrugsInput.DrugInputData> GetCurrentDrugs()
+    {
+        if (selectedClient == null)
+        {
+            return new List<DrugsInput.DrugInputData>();
+        }
+        
+        var drugsStarted = Events.Where(var => var.ClientId == selectedClient.Id && var.EventType == TypeofEvent.StartTakingDrugs && var.State == State.Done).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+        var drugsDosageChange = Events.Where(var => var.ClientId == selectedClient.Id && var.EventType == TypeofEvent.DosageChange && var.State == State.Done).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+        var drugsEnded = Events.Where(var => var.ClientId == selectedClient.Id && var.EventType == TypeofEvent.EndTakingDrugs && var.State == State.Done).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+
+        var mergedList = drugsStarted.ToList();
+        mergedList.AddRange(drugsDosageChange);
+        mergedList.AddRange(drugsEnded);
+
+        mergedList = mergedList.OrderBy(var => var.Date).ToList();
+
+        List<DrugsInput.DrugInputData> resultList = new List<DrugsInput.DrugInputData>();
+
+        for (int i = 0; i < mergedList.Count; i++)
+        {
+            if (mergedList[i].EventType == TypeofEvent.StartTakingDrugs)
+            {
+                resultList.AddRange(mergedList[i].Drugs);
+            }
+            else if (mergedList[i].EventType == TypeofEvent.DosageChange)
+            {
+                foreach (var drug in mergedList[i].Drugs)
+                {
+                    if (resultList.Any(var => var.Id == drug.Id))
+                    {
+                        resultList.Remove(resultList.First(var => var.Id == drug.Id));
+                    }
+                }
+
+                resultList.AddRange(mergedList[i].Drugs);
+            }
+            else if (mergedList[i].EventType == TypeofEvent.EndTakingDrugs)
+            {
+                foreach (var drug in mergedList[i].Drugs)
+                {
+                    if (resultList.Any(var => var.Id == drug.Id))
+                    {
+                        resultList.Remove(resultList.First(var => var.Id == drug.Id));
+                    }
+                }
+            }
+        }
+
+        return resultList;
+    }
+    
+
+    public DateTime? Date { get; set; } = DateTime.Today;    
+    public TimeSpan? Time { get; set; } = DateTime.Now.TimeOfDay;
+
+    public State State { get; set; }
+    
+    public string Note { get; set; } = string.Empty;
+    
+    
+    public List<string>? Urls { get; set; } = new List<string>();
+    public InputTagOptions TagsOptions { get; set; } = new InputTagOptions()
+    {
+        MinLength = 1, 
+        MaxLength = Int32.MaxValue, 
+        WrapperClass = "blazor-tag-wrapper blazor-tag-wrapper-wrap",
+        TagClass = "blazor-tag blazor-tag-ex",
+        InputPlaceholder = "Введите значение",
+        RemoveButtonTooltip = "Удалить"
+    };
+
+    [Parameter] public List<DrugsInput.DrugInputData>? ResultDrugs { get; set; } = new();
+    [Parameter] public Store<Drug, int>? AllDrugs { get; set; }
+
+
+    private Task<IEnumerable<ClientData>> ClientsSearchFunction(string text, CancellationToken cancellationToken)
+    {
+        text = text.ToLower();
+        double tolerance = 0.7;
+
+        return Task.Run(() =>
+        {
+            return Clients.Where(v => v.Name.Contains(text, StringComparison.InvariantCultureIgnoreCase) || v.CardNumber.Contains(text, StringComparison.InvariantCultureIgnoreCase)
+                                                                                                         || v.BirthDate.ToShortDateString().Contains(text, StringComparison.InvariantCultureIgnoreCase)
+                                                                                                         || v.Diagnosis.Any(x => x.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || x.Name.ToLower().Split(' ').Any(name => Utils.CalculateSimilarity(name, text) >= tolerance)));
+        });
+    }
+
+    private void Submit()
+    {
+        //TODO add additional events templates
+        
+        if (selectedClient != null && Date != null)
+            MudDialog.Close(DialogResult.Ok(new ClientEvent()
+            {
+                EventType  = EventType,
+                ClientId  = selectedClient.Id,
+                State  = State,
+                Urls  = Urls?.ToArray()!,
+                Drugs = ResultDrugs!,
+                Note  = Note,
+                Date = Date.Value.Add(Time.Value)
+            }));
+        else
+            Snackbar.Add("Заполните все поля", Severity.Warning);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private string ToStringFunc(TypeofEvent eventType)
+    {
+        switch (eventType)
+        {
+            case TypeofEvent.Consultation:
+                return "Консультация";
+            case TypeofEvent.StartTakingDrugs:
+                return "Начало приёма лекарств";
+            case TypeofEvent.DosageChange:
+                return "Смена дозировки";
+            case TypeofEvent.EndTakingDrugs:
+                return "Конец приёма лекарств";
+            case TypeofEvent.Analysis:
+                return "Анализ";
+            case TypeofEvent.ProlongInjection:
+                return "Инъекция пролонга";
+            case TypeofEvent.Note:
+                return "Записка";
+        }
+        return "Нет информации";
+    }
+
+}

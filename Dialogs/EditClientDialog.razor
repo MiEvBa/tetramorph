@@ -1,0 +1,107 @@
+@using BlazorDexie.Database
+@using BlazorDexie.JsModule
+@using Tetramorph.Doctor.Components
+@using Tetramorph.Doctor.Database
+@using Tetramorph.Doctor.Pages
+
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="CardNumber" Label="Номер карты" Variant="Variant.Text"/>
+        <br/>
+        <MudTextField @bind-Value="Name" Label="ФИО" Variant="Variant.Text"/>
+        <br/>
+        <MudSelect @bind-Value="Sex" T="Models.Sex" ToStringFunc="ToStringFunc" Label="Пол" Variant="Variant.Outlined">
+            <MudSelectItem Value="Models.Sex.Male"/>
+            <MudSelectItem Value="Models.Sex.Female"/>
+        </MudSelect>
+        <br/>
+        <MudDatePicker Label="Дата рождения" Editable="true" @bind-Date="BirthDate" Mask="@(new DateMask("00-00-0000"))" DateFormat="dd-MM-yyyy" Placeholder="01.01.1990"/>
+        <br/>
+        <CustomAutocomplete T="Diagnosis"
+                            Label="Диагнозы"
+                            MultiSelection="true"
+                            Variant="Variant.Outlined"
+                            @bind-SelectedValues="@selectedDiagnoses"
+                            ToStringFunc="@(e => $"{e}")"
+                            SearchFunc="@DiagnosisSearchFunction"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Delete">Удалить</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="Submit">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; }
+    
+    [Parameter] public Models.ClientData Client { get; set; } = new();
+    
+
+    IEnumerable<Diagnosis>? selectedDiagnoses { get; set; } = new List<Diagnosis>();
+
+    [Parameter] public Store<Diagnosis, int> Diagnoses { get; set; }
+    
+    string CardNumber { get; set; }
+    string Name { get; set; }
+    Models.Sex Sex { get; set; }
+    DateTime? BirthDate { get; set; } = DateTime.Today;
+    
+    protected override Task OnInitializedAsync()
+    {
+        return Task.Run(async () =>
+        {
+            CardNumber = Client.CardNumber;
+            Name = Client.Name;
+            Sex = Client.Sex;
+            BirthDate = Client.BirthDate;
+            selectedDiagnoses = Client.Diagnosis;
+        });
+    }
+
+
+    private Task<IEnumerable<Diagnosis>> DiagnosisSearchFunction(string text)
+    {
+        return Task.Run(async () =>
+        {
+            var result = await Diagnoses.Where("Name").StartsWithIgnoreCase(text).ToList();
+            result.AddRange(await Diagnoses.Where("Code").StartsWithAnyOfIgnoreCase(text).ToList());
+            return result.Where(v=>true);
+        });
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(CardNumber) && !string.IsNullOrWhiteSpace(Name) && BirthDate != DateTime.Today)
+            MudDialog.Close(DialogResult.Ok(new Models.ClientData() { Id = Client.Id, CardNumber = CardNumber, Name = Name, Sex = Sex, BirthDate = BirthDate.Value, Diagnosis = selectedDiagnoses?.ToList() }));
+        else
+            Snackbar.Add("Заполните все поля", Severity.Warning);
+    }
+
+    private async void Delete()
+    {
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions(){ YesText = "Удалить", CancelText = "Отмена", Title = "Удалить клиента?", Message = "Внимание! Все данные клиента и его записи в вашем календаре будут удалены."});
+        if(result == true)
+            MudDialog.Close(DialogResult.Ok(Client.Id));
+    }
+    
+    private void Cancel() => MudDialog.Cancel();
+
+    private string ToStringFunc(Models.Sex sex)
+    {
+        switch (sex)
+        {
+            case Models.Sex.Male:
+                return "Мужской";
+            case Models.Sex.Female:
+                return "Женский";
+            default:
+                return "Нет информации";
+        }
+    }
+
+}

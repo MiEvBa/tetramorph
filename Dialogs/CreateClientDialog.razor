@@ -1,0 +1,85 @@
+@using BlazorDexie.Database
+@using Tetramorph.Doctor.Components
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="CardNumber" Label="Номер карты" Variant="Variant.Text"/>
+        <br/>
+        <MudTextField @bind-Value="Name" Label="ФИО" Variant="Variant.Text"/>
+        <br/>
+        <MudSelect @bind-Value="Sex" T="Models.Sex" ToStringFunc="ToStringFunc" Label="Пол" Variant="Variant.Outlined">
+            <MudSelectItem Value="Models.Sex.Male"/>
+            <MudSelectItem Value="Models.Sex.Female"/>
+        </MudSelect>
+        <br/>
+        <MudDatePicker Label="Дата рождения" Editable="true" @bind-Date="BirthDate" Mask="@(new DateMask("00-00-0000"))" DateFormat="dd-MM-yyyy" Placeholder="01.01.1990"/>
+        <br/>
+        <CustomAutocomplete T="Diagnosis"
+                            Label="Диагнозы"
+                            MultiSelection="true"
+                            Variant="Variant.Outlined"
+                            @bind-SelectedValues="@SelectedDiagnoses"
+                            ToStringFunc="@(e => $"{e}")"
+                            SearchFunc="@DiagnosisSearchFunction"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="Submit">Добавить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; }
+    
+
+    IEnumerable<Diagnosis>? SelectedDiagnoses { get; set; } = null;
+    
+    
+    [Parameter] public Store<Diagnosis, int> Diagnoses { get; set; }
+
+    string CardNumber { get; set; }
+    string Name { get; set; }
+    Models.Sex Sex { get; set; }
+    DateTime? BirthDate { get; set; } = DateTime.Today;
+    
+    protected override Task OnInitializedAsync()
+    {
+        return Task.Run(() => Task.CompletedTask);
+    }
+
+
+    private Task<IEnumerable<Diagnosis>> DiagnosisSearchFunction(string text)
+    {
+        return Task.Run(async () =>
+        {
+            var result = await Diagnoses.Where("Name").StartsWithIgnoreCase(text).ToList();
+            result.AddRange(await Diagnoses.Where("Code").StartsWithAnyOfIgnoreCase(text).ToList());
+            return result.Where(_=>true);
+        });
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(CardNumber) && !string.IsNullOrWhiteSpace(Name) && BirthDate != DateTime.Today)
+            MudDialog.Close(DialogResult.Ok(new Models.ClientData() { CardNumber = CardNumber, Name = Name, Sex = Sex, BirthDate = BirthDate!.Value, Diagnosis = SelectedDiagnoses?.ToList() }));
+        else
+            Snackbar.Add("Заполните все поля", Severity.Warning);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private string ToStringFunc(Models.Sex sex)
+    {
+        switch (sex)
+        {
+            case Models.Sex.Male:
+                return "Мужской";
+            case Models.Sex.Female:
+                return "Женский";
+            default:
+                return "Нет информации";
+        }
+    }
+
+}

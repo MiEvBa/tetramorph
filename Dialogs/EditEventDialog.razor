@@ -1,0 +1,238 @@
+@using BlazorDexie.Database
+@using BlazorDexie.JsModule
+@using Tetramorph.Doctor.Components
+@using Tetramorph.Doctor.Database
+@using Tetramorph.Doctor.Models
+@using Tetramorph.Doctor.Pages
+@using BlazorInputTags
+@using Tetramorph.Doctor.Database.Models
+
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Label="Клиент" T="string" Text="@($"№{Сlient.CardNumber} - {Сlient.Name}")" Disabled="true" Variant="Variant.Text"/>
+        <br/>
+        <MudSelect @bind-Value="EventType" T="TypeofEvent" ToStringFunc="ToStringFunc" Label="Тип события" Disabled="true" Variant="Variant.Outlined">
+            <MudSelectItem Value="TypeofEvent.Consultation"/>
+            <MudSelectItem Value="TypeofEvent.StartTakingDrugs"/>
+            <MudSelectItem Value="TypeofEvent.DosageChange"/>
+            <MudSelectItem Value="TypeofEvent.EndTakingDrugs"/>
+            <MudSelectItem Value="TypeofEvent.Analysis"/>
+            <MudSelectItem Value="TypeofEvent.ProlongInjection"/>
+            <MudSelectItem Value="TypeofEvent.Note"/>
+        </MudSelect>
+        <br/>
+        <MudDatePicker Label="Дата события" Editable="true" @bind-Date="Date" Mask="@(new DateMask("00-00-0000"))" DateFormat="dd-MM-yyyy" Placeholder="01.01.2024"/>
+        <br/>
+        <MudTimePicker Label="Время события" Editable="true" AmPm="false" @bind-Time="Time" Placeholder="16:00"/>
+        <br/>
+        @switch (EventType)
+        {
+            case TypeofEvent.Consultation:
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.StartTakingDrugs:
+                <DrugsInput Type="DrugInput.DrugInputType.All" Label="Лекарства" Drugs="AllDrugs" Data="ResultDrugs"/>
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.DosageChange:
+                <DrugsInput Type="DrugInput.DrugInputType.Dosage" Label="Лекарства" Drugs="AllDrugs" Data="ResultDrugs"/>
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.EndTakingDrugs:
+                <DrugsInput Type="DrugInput.DrugInputType.None" Label="Какие лекарства перестать принимать?" Drugs="AllDrugs" Data="ResultDrugs"/>
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.Analysis:
+                <InputTags Value="Urls" Options="@TagsOptions" Label="Ссылки на анализы"/>
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.ProlongInjection:
+                <DrugsInput Type="DrugInput.DrugInputType.None" Label="Какой пролонг?" Drugs="AllDrugs" Data="ResultDrugs"/>
+                <br/>
+                <MudToggleGroup T="State" SelectionMode="SelectionMode.SingleSelection" @bind-Value="State" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                    <MudToggleItem Value="@(State.Planned)">
+                        Запланировано
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Done)">
+                        Завершено
+                    </MudToggleItem>
+                    <MudToggleItem Value="@(State.Cancelled)">
+                        Отменено
+                    </MudToggleItem>
+                </MudToggleGroup>
+                break;
+            case TypeofEvent.Note:
+
+                break;
+        }
+        <br/>
+        <MudTextField @bind-Value="Note" Lines="8" Label="Заметка" Variant="Variant.Text"/>
+        <br/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Delete">Удалить</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="Submit">Обновить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+
+    public InputTagOptions TagsOptions { get; set; } = new InputTagOptions()
+    {
+        MinLength = 1,
+        MaxLength = Int32.MaxValue,
+        WrapperClass = "blazor-tag-wrapper blazor-tag-wrapper-wrap",
+        TagClass = "blazor-tag blazor-tag-ex",
+        InputPlaceholder = "Введите значение",
+        RemoveButtonTooltip = "Удалить"
+    };
+
+
+    [Parameter] public ClientEvent Event { get; set; } = new ClientEvent();
+
+
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; }
+
+
+    [Parameter] public ClientData Сlient { get; set; } = new ClientData();
+
+
+    public TypeofEvent EventType { get; set; }
+    public DateTime? Date { get; set; } = DateTime.Today;
+    public TimeSpan? Time { get; set; } = DateTime.Now.TimeOfDay;
+
+    public State State { get; set; }
+
+    public string Note { get; set; } = string.Empty;
+
+    public List<DrugsInput.DrugInputData>? ResultDrugs { get; set; }
+    [Parameter] public Store<Drug, int> AllDrugs { get; set; }
+
+    public List<string>? Urls { get; set; } = new List<string>();
+
+
+    private void Submit()
+    {
+        if (Date != null && Time != null)
+            MudDialog.Close(DialogResult.Ok(new ClientEvent()
+            {
+                OriginalId = Event.OriginalId,
+                EventType = EventType,
+                ClientId = Event.ClientId,
+                State = State,
+                Urls = Urls?.ToArray()!,
+                Drugs = ResultDrugs!,
+                Note = Note,
+                Date = Date.Value.Date.Add(Time.Value)
+            }));
+        else
+            Snackbar.Add("Заполните все поля", Severity.Warning);
+    }
+
+    private string ToStringFunc(TypeofEvent eventType)
+    {
+        switch (eventType)
+        {
+            case TypeofEvent.Consultation:
+                return "Консультация";
+            case TypeofEvent.StartTakingDrugs:
+                return "Начало приёма лекарств";
+            case TypeofEvent.DosageChange:
+                return "Смена дозировки";
+            case TypeofEvent.EndTakingDrugs:
+                return "Конец приёма лекарств";
+            case TypeofEvent.Analysis:
+                return "Анализ";
+            case TypeofEvent.ProlongInjection:
+                return "Инъекция пролонга";
+            case TypeofEvent.Note:
+                return "Записка";
+        }
+
+        return "Нет информации";
+    }
+
+    private async void Delete()
+    {
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions() { YesText = "Удалить", CancelText = "Отмена", Title = "Удалить событие?", Message = "Внимание! Событие будети удалено." });
+        if (result == true)
+            MudDialog.Close(DialogResult.Ok(Event.OriginalId));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    protected override Task OnInitializedAsync()
+    {
+        return Task.Run(async () =>
+        {
+            EventType = Event.EventType;
+            Date = Event.Date.Date;
+            Time = Event.Date.TimeOfDay;
+            Note = Event.Note;
+            ResultDrugs = Event.Drugs;
+            State = Event.State;
+            Urls = Event.Urls.ToList();
+        });
+    }
+
+}
