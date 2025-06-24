@@ -1,0 +1,118 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/baklusev/tetramorphdoctor/Tetramorph.Doctor.csproj": {}
+  },
+  "projects": {
+    "/Users/baklusev/tetramorphdoctor/Tetramorph.Doctor.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/baklusev/tetramorphdoctor/Tetramorph.Doctor.csproj",
+        "projectName": "Tetramorph.Doctor",
+        "projectPath": "/Users/baklusev/tetramorphdoctor/Tetramorph.Doctor.csproj",
+        "packagesPath": "/Users/baklusev/.nuget/packages/",
+        "outputPath": "/Users/baklusev/tetramorphdoctor/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/baklusev/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "BlazorDexie": {
+              "target": "Package",
+              "version": "[1.5.2, )"
+            },
+            "Bogus": {
+              "target": "Package",
+              "version": "[35.6.1, )"
+            },
+            "FluentValidation": {
+              "target": "Package",
+              "version": "[11.10.0, )"
+            },
+            "Heron.MudCalendar": {
+              "target": "Package",
+              "version": "[2.0.2, )"
+            },
+            "Microsoft.AspNetCore.Components.WebAssembly": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Microsoft.AspNetCore.Components.WebAssembly.DevServer": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Microsoft.NET.ILLink.Tasks": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.10, )",
+              "autoReferenced": true
+            },
+            "Microsoft.NET.Sdk.WebAssembly.Pack": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.10, )",
+              "autoReferenced": true
+            },
+            "MudBlazor": {
+              "target": "Package",
+              "version": "[7.8.0, )"
+            },
+            "Toolbelt.Blazor.PWA.Updater": {
+              "target": "Package",
+              "version": "[2.1.0.1, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.403/PortableRuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "browser-wasm": {
+          "#import": []
+        }
+      }
+    }
+  }
+}
