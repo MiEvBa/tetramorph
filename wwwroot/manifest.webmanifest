@@ -1,0 +1,22 @@
+{
+  "name": "Врач.Тетраморф",
+  "short_name": "Тетраморф",
+  "id": "./",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#03173d",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "wings-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "wings-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ]
+}
