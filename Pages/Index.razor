@@ -1,0 +1,649 @@
+﻿@page "/"
+@inherits LayoutComponentBase
+
+@using System.Globalization
+@using System.Reflection.Emit
+@using System.Runtime.InteropServices.JavaScript
+@using BlazorDexie.JsModule
+@using Tetramorph.Doctor.Components
+@using Tetramorph.Doctor.Database
+@using Tetramorph.Doctor.Database.Models
+@using Tetramorph.Doctor.Dialogs
+@using Tetramorph.Doctor.Models
+
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject LocalStorageAccessor LocalStorageAccessor
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h3">События</MudText>
+<br/>
+<br/>
+<br/>
+
+@if (selectedClients != null && selectedClients.Any())
+{
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5" Inline="true">@selectedClients.First().ToString()</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Default" OnClick="() => ClearSelectedClients()"/>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <div class="pa-4 align-start d-flex">
+                <div>
+                    <MudText Typo="Typo.h6">Дата рождения: <MudText Typo="Typo.h5" Inline="true">@(selectedClients.First().BirthDate.ToString("dd.MM.yyyy", new CultureInfo("ru-RU")))</MudText></MudText>
+                </div>
+                <MudSpacer/>
+                <div>
+                    <MudText Typo="Typo.h5" Inline="true">@(GetSexName(selectedClients.First().Sex))</MudText>
+                </div>
+            </div>
+            <div class="pa-4 align-start d-flex">
+                <MudText Typo="Typo.h6">Лекарства: <MudText Typo="Typo.h5" Inline="false">@GetDrugsSummary(selectedClients.First())</MudText></MudText>
+            </div>
+            <div class="pa-4 align-start d-flex">
+                <div>
+                    @foreach (var testsName in selectedClients.First().Diagnosis)
+                    {
+                        <MudChip Style="height: 120px;" T="string" Size="Size.Small" Color="Color.Dark" Text="@(testsName.ToString())"/>
+                    }
+                </div>
+                <MudSpacer/>
+                <div>
+                    <MudText Typo="Typo.h6">Следующая консультация: <MudText Typo="Typo.h5" Inline="false">@(GetNextConsultation(selectedClients.First()))</MudText></MudText>
+                </div>
+            </div>
+        </MudCardContent>
+        <MudCardActions>
+        </MudCardActions>
+    </MudCard>
+}
+else
+{
+    <MudPaper Outlined="true">
+        <CustomAutocomplete T="ClientData"
+                            PreloadedItems="clients"
+                            Label="Клиенты"
+                            MultiSelection="true"
+                            Variant="Variant.Outlined"
+                            ToStringFunc="@(e => $"№{e.CardNumber} - {e.Name}")"
+                            SearchFunc="@ClientsSearchFunction"
+                            @bind-SelectedValues="@selectedClients"/>
+    </MudPaper>
+}
+<br/>
+
+@if (IsList)
+{
+    <MudTabs @bind-ActivePanelIndex="TabState" Border="true" Outlined="true" PanelClass="px-4 py-6" ApplyEffectsToContainer="true">
+        <ChildContent>
+            <MudTabPanel Text="События">
+                <MudGrid>
+                    <MudItem xs="5">
+                        <MudSelect @bind-Value="EventType" T="TypeofEvent" ToStringFunc="ClientEvent.EventTypeToStringFunc" Label="Тип события" Variant="Variant.Outlined">
+                            <MudSelectItem Value="TypeofEvent.All"/>
+                            <MudSelectItem Value="TypeofEvent.Consultation"/>
+                            <MudSelectItem Value="TypeofEvent.StartTakingDrugs"/>
+                            <MudSelectItem Value="TypeofEvent.DosageChange"/>
+                            <MudSelectItem Value="TypeofEvent.EndTakingDrugs"/>
+                            <MudSelectItem Value="TypeofEvent.Analysis"/>
+                            <MudSelectItem Value="TypeofEvent.ProlongInjection"/>
+                            <MudSelectItem Value="TypeofEvent.Note"/>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="7" Class="align-self-center">
+                        <MudToggleGroup T="int" SelectionMode="SelectionMode.SingleSelection" @bind-Value="viewMode" Vertical="false" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                            <MudToggleItem Value="@(0)">
+                                В прошлом
+                            </MudToggleItem>
+                            <MudToggleItem Value="@(1)">
+                                Ближайшие 4 дня
+                            </MudToggleItem>
+                            <MudToggleItem Value="@(2)">
+                                Будущие
+                            </MudToggleItem>
+                        </MudToggleGroup>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTimeline TimelineAlign="TimelineAlign.Start" TimelinePosition="TimelinePosition.Alternate">
+                            <Virtualize Context="userEvent" Items="@GetEvents(clientsEvents, false)" ItemSize="400">
+                                <EventsTimelineItem EventData="@userEvent" Clients="@clients" UpdateState="@(() => UpdateState(userEvent))" EditEvent="@(() => EditEvent(userEvent))"/>
+                            </Virtualize>
+                        </MudTimeline>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+            <MudTabPanel Text="Задачи">
+                <MudGrid>
+                    <MudItem xs="5">
+                        <MudSelect @bind-Value="EventType" T="TypeofEvent" ToStringFunc="ClientEvent.EventTypeToStringFunc" Label="Тип события" Variant="Variant.Outlined">
+                            <MudSelectItem Value="TypeofEvent.All"/>
+                            <MudSelectItem Value="TypeofEvent.Consultation"/>
+                            <MudSelectItem Value="TypeofEvent.StartTakingDrugs"/>
+                            <MudSelectItem Value="TypeofEvent.DosageChange"/>
+                            <MudSelectItem Value="TypeofEvent.EndTakingDrugs"/>
+                            <MudSelectItem Value="TypeofEvent.Analysis"/>
+                            <MudSelectItem Value="TypeofEvent.ProlongInjection"/>
+                            <MudSelectItem Value="TypeofEvent.Note"/>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="7" Class="align-self-center">
+                        <MudToggleGroup T="int" SelectionMode="SelectionMode.SingleSelection" @bind-Value="StateViewMode" Outlined="true" Delimiters="true" Size="Size.Medium" Color="Color.Dark" Rounded="true" CheckMark="false" Disabled="false">
+                            <MudToggleItem Value="@(0)">
+                                Планы
+                            </MudToggleItem>
+                            <MudToggleItem Value="@(1)">
+                                Завершённые
+                            </MudToggleItem>
+                            <MudToggleItem Value="@(2)">
+                                Отменённые
+                            </MudToggleItem>
+                        </MudToggleGroup>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTimeline TimelineAlign="TimelineAlign.Start" TimelinePosition="TimelinePosition.Alternate">
+                            <Virtualize Context="userEvent" Items="@GetEvents(clientsEvents)" ItemSize="400">
+                                <EventsTimelineItem EventData="@userEvent" Clients="@clients" UpdateState="@(() => UpdateState(userEvent))" EditEvent="@(() => EditEvent(userEvent))"/>
+                            </Virtualize>
+                        </MudTimeline>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+        </ChildContent>
+        <Header>
+            <MudButtonGroup Class="align-self-center">
+                <MudTooltip Text="Календарь">
+                    <MudIconButton Icon="@Icons.Material.Filled.CalendarToday" OnClick="() => IsList = false"/>
+                </MudTooltip>
+                <MudTooltip Text="Список">
+                    <MudIconButton Icon="@Icons.Material.Filled.List" OnClick="() => IsList = true"/>
+                </MudTooltip>
+            </MudButtonGroup>
+        </Header>
+        <TabPanelHeader>
+        </TabPanelHeader>
+    </MudTabs>
+}
+else
+{
+    <MudTabs @bind-ActivePanelIndex="TabState" Border="true" Outlined="true" PanelClass="px-4 py-6" ApplyEffectsToContainer="true">
+        <ChildContent>
+            <MudTabPanel Text="Календарь">
+                <CustomCalendar MonthCellMinHeight="100" DayCellHeight="100" DayItemMinHeight="100" DateRangeChanged="CalendarRangeChanged" Items="@GetEventsByRange()" ItemClicked="CalendarItemClick"  Use24HourClock="true" Color="Color.Dark" FirstDayOfWeek="DayOfWeek.Monday" ShowTodayButton="true" ButtonVariant="Variant.Outlined">
+                    <CellTemplate>
+                        <div style="width: 100%; height: 100%; border: 2px solid @GetColor((context as ClientEvent).GetInfoColor())">
+                            <div style="background-color: @GetColor((context as ClientEvent).GetInfoColor())">
+                                <MudText Style="color: #ffffff;" Typo="Typo.body1" Align="Align.Center">@clients.First(var => var.Id == (context as ClientEvent).ClientId).ToString()</MudText>
+                            </div>
+                            <div class="pa-2">
+                                <MudText Typo="Typo.body2">@context.Text</MudText>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                </CustomCalendar>
+            </MudTabPanel>
+        </ChildContent>
+        <Header>
+            <MudButtonGroup Class="align-self-center">
+                <MudTooltip Text="Календарь">
+                    <MudIconButton Icon="@Icons.Material.Filled.CalendarToday" OnClick="() => IsList = false"/>
+                </MudTooltip>
+                <MudTooltip Text="Список">
+                    <MudIconButton Icon="@Icons.Material.Filled.List" OnClick="() => IsList = true"/>
+                </MudTooltip>
+            </MudButtonGroup>
+        </Header>
+        <TabPanelHeader>
+        </TabPanelHeader>
+    </MudTabs>
+}
+
+
+<br/>
+<br/>
+<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Label="Добавить" Style="position:fixed; top:120px;right:20px" @onclick="AddEvent"/>
+
+
+@code
+{
+    private int _viewMode = 1;
+
+    private int viewMode
+    {
+        get { return _viewMode; }
+        set
+        {
+            _viewMode = value;
+            this.StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await LocalStorageAccessor.GetValueAsync<string>("isSecondRun") != "true")
+        {
+            Navigation.NavigateTo("start", true);
+        }
+        else
+        {
+            await LoadAllData();
+        }
+    }
+
+    private async Task LoadAllData()
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        Diagnosises = await db.DiagnosisNames.ToList();
+
+        clients = (await db.Clients.ToArray()).Select(v => new ClientData()
+        {
+            Id = v.Id,
+            CardNumber = v.CardNumber,
+            Name = v.Name,
+            Diagnosis = v.DiagnosisIds.Select(r => Diagnosises.First(d => d.Id == int.Parse(r))).ToList(),
+            Sex = v.Sex == 0 ? Sex.Male : Sex.Female,
+            BirthDate = DateTime.Parse(v.BirthDate),
+        }).ToList();
+
+
+        clientsEvents = (await db.Events.ToArray()).Select(v => new ClientEvent()
+        {
+            OriginalId = v.Id,
+            ClientId = v.ClientId,
+            Date = DateTime.Parse(v.Date),
+            Note = v.Note,
+            Urls = v.Urls,
+            Drugs = v.Drugs.Select(r => GetDrugForInput(r)).ToList(),
+            EventType = (TypeofEvent)v.EventType,
+            State = (State)v.State
+        }).OrderBy(v => v.Date).Where(var=>var.SetCalendarItem()).ToList();
+
+        try
+        {
+            var absoluteUrl = Navigation.Uri;
+            if (absoluteUrl.Contains("#"))
+            {
+                var token = absoluteUrl.Substring(absoluteUrl.IndexOf("#") + 1);
+                if (token.Contains("clientID="))
+                {
+                    int clientID = int.Parse(token.Replace("clientID", string.Empty).Split("=", StringSplitOptions.RemoveEmptyEntries).First());
+                    selectedClients = new[] { clients.First(var => var.Id == clientID) };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+
+    private DrugsInput.DrugInputData GetDrugForInput(string drug)
+    {
+        var drugArray = drug.Split('|');
+        return new DrugsInput.DrugInputData() { Id = int.Parse(drugArray[0]), Name = drugArray[1], Dosage = drugArray[2], Count = int.Parse(drugArray[3]), TimeToTake = (DrugsInput.DrugInputDataTakeTime)int.Parse(drugArray[4]) };
+    }
+
+    private string GetDrugString(DrugsInput.DrugInputData drug)
+    {
+        return drug.Id + "|" + drug.Name + "|" + drug.Dosage + "|" + drug.Count + "|" + (int)drug.TimeToTake;
+    }
+
+    public List<Diagnosis> Diagnosises { get; set; }
+
+
+    List<ClientData> clients;
+    IEnumerable<ClientData>? selectedClients { get; set; } = new List<ClientData>();
+
+    List<ClientEvent> clientsEvents = new List<ClientEvent>();
+
+    private Task<IEnumerable<ClientData>> ClientsSearchFunction(string text)
+    {
+        text = text.ToLower();
+        double tolerance = 0.7;
+
+        return Task.Run(() =>
+        {
+            return clients.Where(v => v.Name.Contains(text, StringComparison.InvariantCultureIgnoreCase) || v.CardNumber.Contains(text, StringComparison.InvariantCultureIgnoreCase)
+                                                                                                         || v.BirthDate.ToShortDateString().Contains(text, StringComparison.InvariantCultureIgnoreCase)
+                                                                                                         || v.Diagnosis.Any(x => x.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || x.Name.ToLower().Split(' ').Any(name => Utils.CalculateSimilarity(name, text) >= tolerance)));
+        });
+    }
+
+    private async Task AddEvent()
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var parameters = new DialogParameters<CreateEventDialog> { { x => x.Clients, clients }, { x => x.AllDrugs, db.Drugs }, { x => x.selectedClient, selectedClients.FirstOrDefault() }, { x => x.Events, clientsEvents } };
+
+        var result = await DialogService.ShowAsync<CreateEventDialog>("Добавить событие", parameters);
+        var res = await result.Result;
+        if (!res.Canceled)
+        {
+            var evn = (res.Data as ClientEvent);
+
+            var allDrugs = new List<DrugsInput.DrugInputData>();
+
+            //Add dosages
+            if (evn.Drugs != null && evn.Drugs.Count > 0 && evn.Drugs.Any(var => var.Id != -1))
+            {
+                allDrugs = evn.Drugs.Where(var => var.Id != -1).ToList();
+            }
+
+            if (evn.Drugs != null && evn.Drugs.Count > 0 && evn.Drugs.Any(var => var.Id == -1))
+            {
+                var newDrugs = await db.Drugs.BulkAddReturnAllKeys(evn.Drugs.Where(var => var.Id == -1).Select(var => new Drug() { Name = var.Name, UpName = var.Name.ToUpper(), Dosage = new[] { var.Dosage } }));
+                var drugs = await db.Drugs.Where("Id").AnyOf(newDrugs).ToList();
+
+                foreach (var drugInputData in evn.Drugs.Where(var => var.Id == -1))
+                {
+                    var id = drugs.First(var => var.Name == drugInputData.Name).Id;
+                    drugInputData.Id = id;
+                    allDrugs.Add(drugInputData);
+                }
+            }
+
+            await db.Events.Add(new CalendarEvent()
+            {
+                EventType = (int)evn.EventType,
+                ClientId = evn.ClientId,
+                State = (int)evn.State,
+                Urls = evn.Urls,
+                Drugs = allDrugs.Select(var => GetDrugString(var)).ToArray(),
+                Note = evn.Note,
+                Date = evn.Date.ToString()
+            });
+
+            Snackbar.Add("Событие создано");
+
+            await LoadAllData();
+        }
+    }
+
+    private async Task EditEvent(ClientEvent userEvent)
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var clientDB = await db.Clients.Get(userEvent.ClientId);
+
+        var client = new ClientData()
+        {
+            Id = clientDB.Id,
+            CardNumber = clientDB.CardNumber,
+            Name = clientDB.Name,
+            Diagnosis = clientDB.DiagnosisIds.Select(r => Diagnosises.First(d => d.Id == int.Parse(r))).ToList(),
+            Sex = clientDB.Sex == 0 ? Sex.Male : Sex.Female,
+            BirthDate = DateTime.Parse(clientDB.BirthDate),
+        };
+
+        var parameters = new DialogParameters<EditEventDialog>
+        {
+            { x => x.Event, userEvent },
+            { x => x.Сlient, client },
+            { x => x.AllDrugs, db.Drugs }
+        };
+
+        var result = await DialogService.ShowAsync<EditEventDialog>("Изменить данные", parameters);
+        var res = await result.Result;
+
+        if (!res.Canceled)
+        {
+            if (res.Data is ClientEvent envDialog)
+            {
+                var envDB = await db.Events.Get(envDialog.OriginalId);
+
+                envDB.EventType = (int)envDialog.EventType;
+                envDB.State = (int)envDialog.State;
+                envDB.Urls = envDialog.Urls;
+                envDB.Drugs = envDialog.Drugs.Select(var => GetDrugString(var)).ToArray();
+                envDB.Note = envDialog.Note;
+                envDB.Date = envDialog.Date.ToString();
+
+                await db.Events.Put(envDB);
+                Snackbar.Add("Событие  обновлено");
+
+                await LoadAllData();
+            }
+            else
+            {
+                await db.Events.Delete(userEvent.OriginalId);
+
+                Snackbar.Add("Событие удалено");
+                await LoadAllData();
+            }
+        }
+    }
+
+
+    private string GetSexName(Sex sex)
+    {
+        switch (sex)
+        {
+            case Sex.Male:
+                return "Мужчина";
+            case Sex.Female:
+                return "Женщина";
+            default:
+                return "Нет информации";
+        }
+    }
+
+    private MarkupString GetDrugsSummary(ClientData client)
+    {
+        var drugsStarted = clientsEvents.Where(var => var.ClientId == client.Id && var.EventType == TypeofEvent.StartTakingDrugs && var.State == State.Done && var.Date.Date <= DateTime.Today).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+        var drugsDosageChange = clientsEvents.Where(var => var.ClientId == client.Id && var.EventType == TypeofEvent.DosageChange && var.State == State.Done && var.Date.Date <= DateTime.Today).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+        var drugsEnded = clientsEvents.Where(var => var.ClientId == client.Id && var.EventType == TypeofEvent.EndTakingDrugs && var.State == State.Done && var.Date.Date <= DateTime.Today).Select(var => new { EventType = var.EventType, Date = var.Date, Drugs = var.Drugs });
+
+        var mergedList = drugsStarted.ToList();
+        mergedList.AddRange(drugsDosageChange);
+        mergedList.AddRange(drugsEnded);
+
+        mergedList = mergedList.OrderBy(var => var.Date).ToList();
+
+        List<DrugsInput.DrugInputData> resultList = new List<DrugsInput.DrugInputData>();
+
+        for (int i = 0; i < mergedList.Count; i++)
+        {
+            if (mergedList[i].EventType == TypeofEvent.StartTakingDrugs)
+            {
+                resultList.AddRange(mergedList[i].Drugs);
+            }
+            else if (mergedList[i].EventType == TypeofEvent.DosageChange)
+            {
+                foreach (var drug in mergedList[i].Drugs)
+                {
+                    if (resultList.Any(var => var.Id == drug.Id))
+                    {
+                        resultList.Remove(resultList.First(var => var.Id == drug.Id));
+                    }
+                }
+
+                resultList.AddRange(mergedList[i].Drugs);
+            }
+            else if (mergedList[i].EventType == TypeofEvent.EndTakingDrugs)
+            {
+                foreach (var drug in mergedList[i].Drugs)
+                {
+                    if (resultList.Any(var => var.Id == drug.Id))
+                    {
+                        resultList.Remove(resultList.First(var => var.Id == drug.Id));
+                    }
+                }
+            }
+        }
+
+        return resultList.Count == 0 ? new MarkupString("Нет назначений") : new MarkupString(string.Join("<br/>", resultList.Select(var => var.Name + " " + var.Dosage + " <b>X" + var.Count + "</b> " + ToStringFunc(var.TimeToTake))));
+    }
+
+    private string ToStringFunc(DrugsInput.DrugInputDataTakeTime arg)
+    {
+        switch (arg)
+        {
+            case DrugsInput.DrugInputDataTakeTime.Morning:
+                return "Утром";
+            case DrugsInput.DrugInputDataTakeTime.Day:
+                return "Днём";
+            case DrugsInput.DrugInputDataTakeTime.Evening:
+                return "Вечером";
+            case DrugsInput.DrugInputDataTakeTime.Week:
+                return "Еженедельно";
+        }
+
+        return "Нет информации";
+    }
+
+
+    private string GetNextConsultation(ClientData client)
+    {
+        return clientsEvents.FirstOrDefault(var => var.ClientId == client.Id && var.State == State.Planned && var.EventType == TypeofEvent.Consultation && var.Date >= DateTime.Now)?.Date.ToString("dd.MM.yyyy", new CultureInfo("ru-RU")) ?? "Нет данных";
+    }
+
+    private int TabState = 0;
+    private int _stateViewMode = 0;
+
+    private int StateViewMode
+    {
+        get { return _stateViewMode; }
+        set
+        {
+            _stateViewMode = value;
+            this.StateHasChanged();
+        }
+    }
+
+    public void ClearSelectedClients()
+    {
+        selectedClients = new List<ClientData>();
+    }
+
+    private TypeofEvent _EventType = TypeofEvent.All;
+
+    public TypeofEvent EventType
+    {
+        get { return _EventType; }
+        set
+        {
+            _EventType = value;
+            this.StateHasChanged();
+        }
+    }
+
+    private bool GetEventTypeNotFilterd()
+    {
+        return EventType == TypeofEvent.All;
+    }
+
+    private async Task UpdateState(ClientEvent envDialog)
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var envDB = await db.Events.Get(envDialog.OriginalId);
+
+        envDB.EventType = (int)envDialog.EventType;
+        envDB.State = (int)envDialog.State;
+        envDB.Urls = envDialog.Urls;
+        envDB.Drugs = envDialog.Drugs.Select(var => GetDrugString(var)).ToArray();
+        envDB.Note = envDialog.Note;
+        envDB.Date = envDialog.Date.ToString();
+
+        await db.Events.Put(envDB);
+        Snackbar.Add("Событие  обновлено");
+        await LoadAllData();
+    }
+
+    private bool IsList { get; set; } = false;
+    private string GetColor(Color color) => $"var(--mud-palette-{color.ToDescriptionString()})";
+
+    private DateRange Range { get; set; } = new DateRange(DateTime.Today.AddMonths(-2), DateTime.Today.AddMonths(2));
+
+    private List<ClientEvent> GetEvents(List<ClientEvent> clientEvents, bool isStateView = true)
+    {
+        if (isStateView)
+        {
+            if (selectedClients != null && selectedClients.Any())
+            {
+                @switch (StateViewMode)
+                {
+                    case 0:
+                        return clientEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.State == State.Planned).ToList();
+                    case 1:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.State == State.Done).ToList();
+                    case 2:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.State == State.Cancelled).ToList();
+                }
+            }
+            else
+            {
+                @switch (StateViewMode)
+                {
+                    case 0:
+                        return clientEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.State == State.Planned).ToList();
+                    case 1:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.State == State.Done).ToList();
+                    case 2:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.State == State.Cancelled).ToList();
+                }
+            }
+        }
+        else
+        {
+            var weekAfter = DateTime.Today.AddDays(4);
+
+            if (selectedClients != null && selectedClients.Any())
+            {
+                @switch (viewMode)
+                {
+                    case 0:
+                        return clientEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.Date.Date < DateTime.Today).ToList();
+                    case 1:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.Date.Date >= DateTime.Today && v.Date.Date < weekAfter).ToList();
+                    case 2:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => selectedClients.Any(r => r.Id == v.ClientId) && v.Date.Date > DateTime.Today).ToList();
+                }
+            }
+            else
+            {
+                @switch (viewMode)
+                {
+                    case 0:
+                        return clientEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.Date.Date < DateTime.Today).ToList();
+                    case 1:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.Date.Date >= DateTime.Today && v.Date.Date < weekAfter).ToList();
+                    case 2:
+                        return clientsEvents.Where(var => GetEventTypeNotFilterd() || var.EventType == EventType).Where(v => v.Date.Date > DateTime.Today).ToList();
+                }
+            }
+        }
+
+        return new List<ClientEvent>();
+    }
+
+    private async Task CalendarItemClick(CalendarItem item)
+    {
+        await EditEvent(item as ClientEvent);
+    }
+    
+    private void CalendarRangeChanged(DateRange range)
+    {
+        Range = range;
+        this.StateHasChanged();
+    }
+
+    private IEnumerable<CalendarItem> GetEventsByRange()
+    {
+        if (selectedClients != null && selectedClients.Any())
+            return clientsEvents.Where(var=>var.ClientId == selectedClients.First().Id).Where(var => var.Date.Date >= Range.Start.Value.Date &&  var.Date.Date <= Range.End.Value.Date);
+        else
+            return clientsEvents.Where(var => var.Date.Date >= Range.Start.Value.Date &&  var.Date.Date <= Range.End.Value.Date);
+    }
+}

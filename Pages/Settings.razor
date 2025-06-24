@@ -1,0 +1,350 @@
+﻿@page "/settings"
+@using System.IO
+@using System.Text.Json
+@using BlazorDexie.JsModule
+@using Tetramorph.Doctor.Database
+@inherits LayoutComponentBase
+
+@using FluentValidation
+@using Tetramorph.Doctor.Database.Models
+@using Severity = MudBlazor.Severity
+
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject LocalStorageAccessor LocalStorageAccessor
+@inject ClipboardService ClipboardService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h3">Настройки</MudText>
+<br/>
+<br/>
+
+<MudTabs Outlined="true">
+    <MudTabPanel Text="Настройки" Icon="@Icons.Material.Filled.Settings">
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CopyAll" Color="Color.Info" Size="Size.Small" @onclick="DeleteAllData">Удалить данные</MudButton>
+    </MudTabPanel>
+    <MudTabPanel Text="Файловое облако" Disabled="true" Icon="@Icons.Material.Filled.Cloud">
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ваша почта" Immediate="true"ReadOnly="false" InputType="InputType.Email" Variant="Variant.Text" @bind-Value="@cloudEmail" Lines="1"/>
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Пароль приложения" Immediate="true" ReadOnly="false" InputType="InputType.Password" Variant="Variant.Text" @bind-Value="@cloudPassword" Lines="1"/>
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ключ" Immediate="true" ReadOnly="false" Variant="Variant.Text" @bind-Value="@cloudKey" Lines="4"/>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="true" StartIcon="@Icons.Material.Filled.NetworkCheck" Color="Color.Primary" Size="Size.Small" @onclick="CheckConnection">Проверить соединение</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="true" StartIcon="@Icons.Material.Filled.Save" Color="Color.Primary" Size="Size.Small" @onclick="SaveCloudData">Сохранить</MudButton>
+        <br/>
+        <br/>
+        <MudButton StartIcon="@Icons.Material.Filled.CloudSync" Variant="Variant.Filled" Color="Color.Info" Disabled="@_processing" OnClick="Sync">
+            @if (_processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">Обновляем</MudText>
+            }
+            else
+            {
+                <MudText>Cинхронизировать</MudText>
+            }
+        </MudButton>
+    </MudTabPanel>
+    <MudTabPanel Text="Экспорт" Icon="@Icons.Material.Filled.ImportExport">
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ключ" ReadOnly="true" Variant="Variant.Text" Text="@localKeyForSave" Lines="4"/>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CopyAll" Color="Color.Info" Size="Size.Small" @onclick="CopyKey">Скопировать</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.ImportExport" Color="Color.Info" Size="Size.Small" Disabled="@_exporting" @onclick="ExportData">
+            @if (_exporting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">Экспорт</MudText>
+            }
+            else
+            {
+                <MudText>Экспорт данных</MudText>
+            }
+        </MudButton>
+    </MudTabPanel>
+    <MudTabPanel Text="Импорт" Icon="@Icons.Material.Filled.CopyAll">
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ключ" ReadOnly="false" Variant="Variant.Text" Text="@localKeyForImport" Lines="4"/>
+        <br/>
+        <br/>
+        <MudForm Model="@_model"
+                 @bind-IsValid="_isValid"
+                 @bind-IsTouched="_isTouched"
+                 Validation="@_validationRules.ValidateValue">
+            <MudItem xs="12">
+                <MudFileUpload T="IReadOnlyList<IBrowserFile>"
+                               MaximumFileCount="1"
+                               @ref="@_fileUpload"
+                               @bind-Files="_model.Files"
+                               For="@(() => _model.Files)"
+                               AppendMultipleFiles
+                               Hidden="@false"
+                               InputClass="absolute mud-width-full mud-height-full overflow-hidden z-10"
+                               InputStyle="opacity:0"
+                               ErrorText="@string.Empty"
+                               tabindex="-1"
+                               @ondrop="@ClearDragClass"
+                               @ondragenter="@SetDragClass"
+                               @ondragleave="@ClearDragClass"
+                               @ondragend="@ClearDragClass">
+                    <ActivatorContent>
+                        <MudPaper Height="300px"
+                                  Outlined="true"
+                                  Class="@_dragClass">
+                            <MudText Typo="Typo.h6">
+                                Перетащите файл или нажмите на поле
+                            </MudText>
+                            @foreach (var file in _model.Files?.Select(file => file.Name) ?? Enumerable.Empty<string>())
+                            {
+                                <MudChip T="string" Color="Color.Dark" Text="@file"/>
+                            }
+                        </MudPaper>
+                    </ActivatorContent>
+                </MudFileUpload>
+                <MudToolBar Gutters="@false"
+                            Class="relative d-flex justify-end gap-4">
+                    <MudButton Color="Color.Primary"
+                               OnClick="@OpenFilePickerAsync"
+                               Variant="Variant.Filled">
+                        Открыть
+                    </MudButton>
+                    <MudButton Color="Color.Primary"
+                               Disabled="@(!_isValid || !_isTouched || _model.Files is null || !_model.Files.Any())"
+                               OnClick="@Upload"
+                               Variant="Variant.Filled">
+                        Загрузить
+                    </MudButton>
+                    <MudButton Color="Color.Error"
+                               Disabled="@(_model.Files is null || !_model.Files.Any())"
+                               OnClick="@ClearAsync"
+                               Variant="Variant.Filled">
+                        Очистить
+                    </MudButton>
+                </MudToolBar>
+            </MudItem>
+            <MudItem>
+                @if (_fileUpload?.ValidationErrors.Any() ?? false)
+                {
+                    <MudText Color="Color.Error"
+                             Typo="@Typo.caption">
+                        @_fileUpload?.ValidationErrors[0]
+                    </MudText>
+                }
+            </MudItem>
+        </MudForm>
+    </MudTabPanel>
+</MudTabs>
+
+
+@code{
+
+    public string localKeyForSave = string.Empty;
+    public string localKeyForImport = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await LocalStorageAccessor.GetValueAsync<string>("isSecondRun") != "true")
+        {
+            Navigation.NavigateTo("start", true);
+        }
+        else
+        {
+            localKeyForSave = await LocalStorageAccessor.GetValueAsync<string>("Key");
+            localKeyForImport = localKeyForSave;
+
+            cloudKey = localKeyForImport;
+            cloudEmail = await LocalStorageAccessor.GetValueAsync<string>("CloudEmail") ?? "";
+            cloudPassword = await LocalStorageAccessor.GetValueAsync<string>("CloudPassword") ?? "";
+        }
+    }
+
+    public async void CopyKey()
+    {
+        Snackbar.Add("Ключ скопирован");
+        await ClipboardService.WriteTextAsync(localKeyForSave);
+    }
+
+
+    private bool _exporting = false;
+
+    public async void ExportData()
+    {
+        _exporting = true;
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var clients = await db.Clients.ToList();
+        var events = await db.Events.ToList();
+        var drugs = await db.Drugs.ToList();
+
+        //TODO Export all data
+        var exportData = new ExportEncryptedData() { Clients = clients, Events = events, Drugs = drugs };
+
+
+        var exportDataJson = JsonSerializer.Serialize(exportData);
+
+        var encrypted = await JS.InvokeAsync<string>("encryptWithPublicKey", new object?[] { exportDataJson, localKeyForSave });
+        await JS.InvokeAsync<string>("exportJsonToFile", new object?[] { encrypted, "tetramorph.data", "text/plain" });
+
+        Navigation.Refresh();
+
+        _exporting = false;
+    }
+
+
+#nullable enable
+    public class Model
+    {
+        public IReadOnlyList<IBrowserFile>? Files { get; set; } = new List<IBrowserFile>();
+    }
+
+    private Model _model = new();
+    private ModelFluentValidator _validationRules = new();
+    private MudFileUpload<IReadOnlyList<IBrowserFile>>? _fileUpload;
+    private bool _isValid;
+    private bool _isTouched;
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full";
+    private string _dragClass = DefaultDragClass;
+
+    private async void Upload()
+    {
+        var file = _fileUpload.Files.First();
+
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        using (var stream = file.OpenReadStream(int.MaxValue))
+        using (var reader = new StreamReader(stream))
+        {
+            var encrypted = await reader.ReadToEndAsync();
+
+            try
+            {
+                var exportJson = await JS.InvokeAsync<string>("decryptWithPublicKey", new object?[] { encrypted, localKeyForImport });
+
+                var exportData = JsonSerializer.Deserialize<ExportEncryptedData>(exportJson);
+
+                await DatabaseUtils.ClearAndInitDatabase(JS, false);
+
+                await db.Clients.BulkAdd(exportData.Clients);
+                await db.Events.BulkAdd(exportData.Events);
+                await db.Drugs.BulkAdd(exportData.Drugs);
+
+                await LocalStorageAccessor.SetValueAsync("Key", localKeyForImport);
+
+                Snackbar.Add("База успешно загружена", Severity.Info);
+                await Task.Delay(1000);
+
+                Navigation.NavigateTo("", true);
+            }
+            catch (Exception e)
+            {
+                Snackbar.Add("Проверьте ключ и формат файла", Severity.Error);
+            }
+        }
+    }
+
+    private void SetDragClass()
+        => _dragClass = $"{DefaultDragClass} mud-border-primary";
+
+    private void ClearDragClass()
+        => _dragClass = DefaultDragClass;
+
+    private Task OpenFilePickerAsync()
+        => _fileUpload?.OpenFilePickerAsync() ?? Task.CompletedTask;
+
+    private Task ClearAsync()
+        => _fileUpload?.ClearAsync() ?? Task.CompletedTask;
+
+    public class ModelFluentValidator : AbstractValidator<Model>
+    {
+        public ModelFluentValidator()
+        {
+            RuleFor(x => x.Files)
+                .NotEmpty().Must(v => v?.Count == 1)
+                .WithMessage("Выбирете один файл");
+        }
+
+        public Func<object, string, Task<IEnumerable<string>>> ValidateValue => async (model, propertyName) =>
+        {
+            var result = await ValidateAsync(ValidationContext<Model>.CreateWithOptions((Model)model, x => x.IncludeProperties(propertyName)));
+            return result.IsValid ? Array.Empty<string>() : result.Errors.Select(e => e.ErrorMessage);
+        };
+    }
+
+
+    public class ExportEncryptedData
+    {
+        public List<Client> Clients { get; set; }
+        public List<CalendarEvent> Events { get; set; }
+        public List<Drug> Drugs { get; set; }
+    }
+
+
+    private string cloudEmail = string.Empty;
+    private string cloudPassword = string.Empty;
+    private string cloudKey = string.Empty;
+
+    private bool _processing = true;
+
+    async Task Sync()
+    {
+        _processing = true;
+        await Task.Delay(2000);
+        _processing = false;
+
+        Navigation.Refresh(true);
+    }
+
+    async Task CheckConnection()
+    {
+    }
+
+    async Task SaveCloudData()
+    {
+        await LocalStorageAccessor.SetValueAsync("Key", cloudKey);
+        await LocalStorageAccessor.SetValueAsync("CloudEmail", cloudEmail);
+        await LocalStorageAccessor.SetValueAsync("CloudPassword", cloudPassword);
+
+        Snackbar.Add("Данные сохранены", Severity.Success);
+    }
+
+    async Task DeleteAllData()
+    {
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions(){ YesText = "Удалить", CancelText = "Отмена", Title = "Удалить все данные?", Message = "Внимание! Все данные будут удалены."});
+        if (result == true)
+        {
+            result = await DialogService.ShowMessageBox(new MessageBoxOptions(){ YesText = "Да, удалить", CancelText = "Отмена", Title = "Вы уверены?", Message = "Внимание! Всё будет удалено."});
+            if (result == true)
+            {
+                var moduleFactory = new EsModuleFactory(JS);
+                var db = new DatabaseContext(moduleFactory);
+                await db.Delete();
+
+                await LocalStorageAccessor.SetValueAsync("Key", "");
+                await LocalStorageAccessor.SetValueAsync("CloudEmail", "");
+                await LocalStorageAccessor.SetValueAsync("CloudPassword", "");
+                await LocalStorageAccessor.SetValueAsync("isSecondRun", "false");
+                Navigation.NavigateTo("start");
+            }
+        }
+    }
+
+
+}

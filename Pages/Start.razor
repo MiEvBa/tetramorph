@@ -1,0 +1,413 @@
+﻿@page "/start"
+
+@using System.IO
+@using System.Text.Json
+@using BlazorDexie.JsModule
+@using FluentValidation
+@using Tetramorph.Doctor.Database
+@using Tetramorph.Doctor.Database.Models
+@using Severity = MudBlazor.Severity
+
+@inherits LayoutComponentBase
+
+@inject LocalStorageAccessor LocalStorageAccessor
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ClipboardService ClipboardService
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h1">Привет!</MudText>
+<br/>
+<br/>
+
+@switch (CurrentState)
+{
+    case StartState.Start:
+        <MudText Typo="Typo.h3">Начнём?</MudText>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="StartNew">Первый запуск</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" @onclick="Recover">Восстановить данные</MudButton>
+        break;
+    case StartState.StartNew:
+        <MudText Typo="Typo.h3">Как будем сохранять данные?</MudText>
+        <br/>
+        <br/>
+        <MudText Typo="Typo.h6">
+            <b>Внимание!</b><MudText Inline="false">При локальном хранении, данные могут быть потеряны если вы не будете их регулярно экспортировать и скачивать</MudText>
+        </MudText>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="OpenCloudSaveSteps">В облаке</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" @onclick="OpenLocalInstruction">Локально</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" @onclick="GoBack">Назад</MudButton>
+        break;
+    case StartState.StartNewCloud:
+        <MudText Typo="Typo.h3">Нужно зарегистрироваться</MudText>
+        <br/>
+        <br/>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" @onclick="GoBack">Назад</MudButton>
+        break;
+    case StartState.StartNewLocal:
+        <MudText Typo="Typo.h3">Инструкция по локальному сохранению</MudText>
+        <br/>
+        <br/>
+        <MudText Typo="Typo.h6">
+            <b>Внимание!</b><MudText Inline="false">Все данные хранятся локально только в этом браузере и недоступны с других компьютеров. Скопируйте ключ в безопасное место, иначе вы можете потерять доступ к вашим данным</MudText>
+        </MudText>
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ключ" Disabled="@isButtonsDisabled" Variant="Variant.Text" @bind-Value="@localKeyForSave" Lines="4"/>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="@isButtonsDisabled" StartIcon="@Icons.Material.Filled.Save" Color="Color.Info" Size="Size.Small" @onclick="CopyKey">Скопировать</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="@isButtonsDisabled" StartIcon="@Icons.Material.Filled.Refresh" Color="Color.Info" Size="Size.Small" @onclick="GenerateKey">Изменить ключ</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="@isButtonsDisabled" Color="Color.Primary" @onclick="SetDoneMock">Завершить настройку (тестовые данные)</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="@isButtonsDisabled" Color="Color.Primary" @onclick="SetDone">Завершить настройку</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Disabled="@isButtonsDisabled" @onclick="GoBack">Назад</MudButton>
+        break;
+    case StartState.Recover:
+        <MudText Typo="Typo.h3">Как будем восстанавливать?</MudText>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="RecoverCloud">Облачный файл</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" @onclick="RecoverLocal">Локальный файл</MudButton>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" @onclick="GoBack">Назад</MudButton>
+        break;
+    case StartState.RecoverCloud:
+        <MudText Typo="Typo.h3">Восстановление из облака</MudText>
+        <br/>
+        <br/>
+
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" @onclick="GoBack">Назад</MudButton>
+        break;
+    case StartState.RecoverLocal:
+        <MudText Typo="Typo.h3">Восстановление локально</MudText>
+        <br/>
+        <br/>
+        <MudText Typo="Typo.h6">
+            <b>Внимание!</b><MudText Inline="false">Загрузите ранее экспортированный файл и введите ключ к нему</MudText>
+        </MudText>
+        <br/>
+        <br/>
+        <MudTextField T="string" Label="Ключ" Immediate="true" ReadOnly="false" Variant="Variant.Text" @bind-Value="@localKeyForImport" Lines="4"/>
+        <br/>
+        <br/>
+        <MudForm Model="@_model"
+                 @bind-IsValid="_isValid"
+                 @bind-IsTouched="_isTouched"
+                 Validation="@_validationRules.ValidateValue">
+            <MudItem xs="12">
+                <MudFileUpload T="IReadOnlyList<IBrowserFile>"
+                               MaximumFileCount="1"
+                               @ref="@_fileUpload"
+                               @bind-Files="_model.Files"
+                               For="@(() => _model.Files)"
+                               AppendMultipleFiles
+                               Hidden="@false"
+                               InputClass="absolute mud-width-full mud-height-full overflow-hidden z-10"
+                               InputStyle="opacity:0"
+                               ErrorText="@string.Empty"
+                               tabindex="-1"
+                               @ondrop="@ClearDragClass"
+                               @ondragenter="@SetDragClass"
+                               @ondragleave="@ClearDragClass"
+                               @ondragend="@ClearDragClass">
+                    <ActivatorContent>
+                        <MudPaper Height="300px"
+                                  Outlined="true"
+                                  Class="@_dragClass">
+                            <MudText Typo="Typo.h6">
+                                Перетащите файл или нажмите на поле
+                            </MudText>
+                            @foreach (var file in _model.Files?.Select(file => file.Name) ?? Enumerable.Empty<string>())
+                            {
+                                <MudChip T="string" Color="Color.Dark" Text="@file"/>
+                            }
+                        </MudPaper>
+                    </ActivatorContent>
+                </MudFileUpload>
+                <MudToolBar Gutters="@false"
+                            Class="relative d-flex justify-end gap-4">
+                    <MudButton Color="Color.Primary"
+                               OnClick="@OpenFilePickerAsync"
+                               Variant="Variant.Filled">
+                        Открыть
+                    </MudButton>
+                    <MudButton Color="Color.Primary"
+                               Disabled="@(!_isValid || !_isTouched || _model.Files is null || !_model.Files.Any())"
+                               OnClick="@Upload"
+                               Variant="Variant.Filled">
+                        Загрузить
+                    </MudButton>
+                    <MudButton Color="Color.Error"
+                               Disabled="@(_model.Files is null || !_model.Files.Any())"
+                               OnClick="@ClearAsync"
+                               Variant="Variant.Filled">
+                        Очистить
+                    </MudButton>
+                </MudToolBar>
+            </MudItem>
+            <MudItem>
+                @if (_fileUpload?.ValidationErrors.Any() ?? false)
+                {
+                    <MudText Color="Color.Error"
+                             Typo="@Typo.caption">
+                        @_fileUpload?.ValidationErrors[0]
+                    </MudText>
+                }
+            </MudItem>
+        </MudForm>
+        <br/>
+        <br/>
+        <MudButton Variant="Variant.Filled" @onclick="GoBack">Назад</MudButton>
+        break;
+}
+
+
+@code
+{
+    public StartState CurrentState = StartState.Start;
+
+    public Stack<StartState> HistoryStack = new();
+    public bool isButtonsDisabled { get; set; }
+
+
+    public async void Recover()
+    {
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.Recover;
+        this.StateHasChanged();
+    }
+
+
+    public async void RecoverLocal()
+    {
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.RecoverLocal;
+        this.StateHasChanged();
+    }
+
+    public async void RecoverCloud()
+    {
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.RecoverCloud;
+        this.StateHasChanged();
+    }
+
+
+    public async void StartNew()
+    {
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.StartNew;
+        this.StateHasChanged();
+    }
+
+    public async void OpenCloudSaveSteps()
+    {
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.StartNewCloud;
+        this.StateHasChanged();
+    }
+
+    public string localKeyForSave = string.Empty;
+
+    public async void OpenLocalInstruction()
+    {
+        GenerateKey();
+        CopyKey();
+
+        HistoryStack.Push(CurrentState);
+        CurrentState = StartState.StartNewLocal;
+    }
+
+    public async void GenerateKey()
+    {
+        localKeyForSave = await JS.InvokeAsync<string>("getKey");
+        this.StateHasChanged();
+    }
+
+    public async void CopyKey()
+    {
+        Snackbar.Add("Ключ скопирован");
+        await ClipboardService.WriteTextAsync(localKeyForSave);
+    }
+
+    public async void GoBack()
+    {
+        CurrentState = HistoryStack.Pop();
+        this.StateHasChanged();
+    }
+
+    public async Task SetDone()
+    {
+        isButtonsDisabled = true;
+        this.StateHasChanged();
+        
+        await LocalStorageAccessor.SetValueAsync<string>("isSecondRun", "true");
+        await LocalStorageAccessor.SetValueAsync("Key", localKeyForSave);
+
+        //TODO show load
+        await DatabaseUtils.ClearAndInitDatabase(JS);
+        
+        isButtonsDisabled = false;
+        this.StateHasChanged();
+        
+        Navigation.NavigateTo("", true);
+    }
+
+    public async Task SetDoneMock()
+    {
+        isButtonsDisabled = true;
+        this.StateHasChanged();
+        
+        await LocalStorageAccessor.SetValueAsync<string>("isSecondRun", "true");
+        await LocalStorageAccessor.SetValueAsync("Key", localKeyForSave);
+
+        //TODO show load
+        await DatabaseUtils.ClearAndInitDatabase(JS);
+        
+        //TODO remove mock
+        await DatabaseContext.MockClientsDatabase(JS);
+
+        isButtonsDisabled = false;
+        this.StateHasChanged();
+        
+        Navigation.NavigateTo("", true);
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        if (await LocalStorageAccessor.GetValueAsync<string>("isSecondRun") == "true")
+        {
+            Navigation.NavigateTo("", true);
+        }
+        else
+        {
+            HistoryStack.Push(StartState.Start);
+        }
+    }
+
+    public string localKeyForImport = string.Empty;
+
+#nullable enable
+    public class Model
+    {
+        public IReadOnlyList<IBrowserFile>? Files { get; set; } = new List<IBrowserFile>();
+    }
+
+    private Model _model = new();
+    private ModelFluentValidator _validationRules = new();
+    private MudFileUpload<IReadOnlyList<IBrowserFile>>? _fileUpload;
+    private bool _isValid;
+    private bool _isTouched;
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full";
+    private string _dragClass = DefaultDragClass;
+
+    private async void Upload()
+    {
+        var file = _fileUpload.Files.First();
+
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        using (var stream = file.OpenReadStream(int.MaxValue))
+        using (var reader = new StreamReader(stream))
+        {
+            var encrypted = await reader.ReadToEndAsync();
+
+            try
+            {
+                var exportJson = await JS.InvokeAsync<string>("decryptWithPublicKey", new object?[] { encrypted, localKeyForImport });
+
+                var exportData = JsonSerializer.Deserialize<Settings.ExportEncryptedData>(exportJson);
+
+                await DatabaseUtils.ClearAndInitDatabase(JS,false);
+
+
+                await db.Clients.BulkAdd(exportData.Clients);
+                await db.Drugs.BulkAdd(exportData.Drugs);
+                await db.Events.BulkAdd(exportData.Events);
+
+                await LocalStorageAccessor.SetValueAsync("Key", localKeyForImport);
+
+                Snackbar.Add("База успешно загружена", Severity.Info);
+                await Task.Delay(1000);
+
+                await LocalStorageAccessor.SetValueAsync<string>("isSecondRun", "true");
+
+                Navigation.NavigateTo("", true);
+            }
+            catch (Exception e)
+            {
+                Snackbar.Add("Проверьте ключ и формат файла", Severity.Error);
+            }
+        }
+    }
+
+    private void SetDragClass()
+        => _dragClass = $"{DefaultDragClass} mud-border-primary";
+
+    private void ClearDragClass()
+        => _dragClass = DefaultDragClass;
+
+    private Task OpenFilePickerAsync()
+        => _fileUpload?.OpenFilePickerAsync() ?? Task.CompletedTask;
+
+    private Task ClearAsync()
+        => _fileUpload?.ClearAsync() ?? Task.CompletedTask;
+
+    public class ModelFluentValidator : AbstractValidator<Model>
+    {
+        public ModelFluentValidator()
+        {
+            RuleFor(x => x.Files)
+                .NotEmpty().Must(v => v?.Count == 1)
+                .WithMessage("Выбирете один файл");
+        }
+
+        public Func<object, string, Task<IEnumerable<string>>> ValidateValue => async (model, propertyName) =>
+        {
+            var result = await ValidateAsync(ValidationContext<Model>.CreateWithOptions((Model)model, x => x.IncludeProperties(propertyName)));
+            return result.IsValid ? Array.Empty<string>() : result.Errors.Select(e => e.ErrorMessage);
+        };
+    }
+
+
+    public enum StartState
+    {
+        Start,
+
+
+        StartNew,
+        StartNewLocal,
+        StartNewCloud,
+
+
+        Recover,
+        RecoverCloud,
+        RecoverLocal
+    }
+}

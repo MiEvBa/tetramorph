@@ -1,0 +1,237 @@
+﻿@page "/clients"
+
+@using System.Globalization
+@using BlazorDexie.JsModule;
+@using Tetramorph.Doctor.Database
+@using Tetramorph.Doctor.Dialogs
+@using Tetramorph.Doctor.Models
+
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject LocalStorageAccessor LocalStorageAccessor
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@attribute [StreamRendering]
+
+<MudText Typo="Typo.h3">Клиенты</MudText>
+
+<br/>
+@if (clients == null)
+{
+    <p>
+        <em>Загрузка...</em>
+    </p>
+}
+else
+{
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+
+    <MudPaper Width="100%">
+        <MudContainer>
+            <table>
+                <thead>
+                <tr>
+                    <th style="word-wrap: break-word; text-align: left; width: 2%">№</th>
+                    <th style="word-wrap: break-word; text-align: left; width: 10%">ФИО</th>
+                    <th style="word-wrap: break-word; text-align: left; width: 5%">Пол</th>
+                    <th style="word-wrap: break-word; text-align: left; width: 10%">Дата рождения</th>
+                    <th style="word-wrap: break-word; text-align: left; width: 5%">Диагнозы</th>
+                    <th style="word-wrap: break-word; text-align: left; width: 10%">Управление</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var client in clients)
+                {
+                    if (!IsVisible(client))
+                        continue;
+
+                    <tr style="border-bottom:1px solid black">
+                        <td style="word-wrap: break-word; width: 2%">@client.CardNumber</td>
+                        <td style="word-wrap: break-word; width: 10%">@client.Name</td>
+                        <td style="word-wrap: break-word; width: 5%">@GetSexName(client.Sex)</td>
+                        <td style="word-wrap: break-word; width: 10%">@(client.BirthDate.ToString("dd.MM.yyyy", new CultureInfo("ru-RU")))</td>
+                        <td style="word-wrap: break-word; width: 5%">
+                            @foreach (var testsName in @client.Diagnosis)
+                            {
+                                <MudChip Style="height: auto;" T="string" Size="Size.Small" Text="@(testsName.ToString())"/>
+                            }
+                        </td>
+                        <td style="word-wrap: break-word; width: 10%">
+                            <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" @onclick="async () => await OpenClientCalendar(client)"/>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" @onclick="async () => await EditClient(client)"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="6">
+                            <MudDivider/>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </MudContainer>
+    </MudPaper>
+
+
+    <div style="position:fixed; top:120px;">
+        <MudPaper Outlined="true">
+            <MudTextField Immediate="true" DebounceInterval="200" Style="width:500px" Variant="Variant.Filled" Label="Поиск" HelperText="Введите номер карты или пол или номер/название диагноза или дату рождения"
+                          @bind-Value="Filter"/>
+        </MudPaper>
+    </div>
+    <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Label="Добавить" Style="position:fixed; top:120px;right:20px" @onclick="CreateClient"/>
+}
+
+@code{
+
+
+    private ClientData[]? clients;
+
+    public async Task CreateClient()
+    {  
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+        
+        var parameters = new DialogParameters<CreateClientDialog> {  {x=> x.Diagnoses, db.DiagnosisNames} };
+
+        var result = await DialogService.ShowAsync<CreateClientDialog>("Добавить клиента",parameters);
+        var res = await result.Result;
+        if (!res.Canceled)
+        {
+
+            var client = (res.Data as ClientData);
+
+            await db.Clients.Add(new Client() { CardNumber = client.CardNumber, Name = client.Name, Sex = (int)client.Sex, BirthDate = client.BirthDate.ToLongDateString(), DiagnosisIds = client.Diagnosis.Select(v => v.Id.ToString()).ToArray()});
+
+            Snackbar.Add("Клиент создан");
+
+            await LoadClients();
+        }
+    }
+
+    public async Task EditClient(ClientData client)
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var parameters = new DialogParameters<EditClientDialog> { { x => x.Client, client }, {x=> x.Diagnoses, db.DiagnosisNames} };
+
+        var result = await DialogService.ShowAsync<EditClientDialog>("Изменить данные", parameters);
+        var res = await result.Result;
+        if (!res.Canceled)
+        {
+            if (res.Data is ClientData)
+            {
+                var clientDialog = (res.Data as ClientData);
+                var clientDB = await db.Clients.Get(clientDialog.Id);
+
+                clientDB.CardNumber = clientDialog.CardNumber;
+                clientDB.Name = clientDialog.Name;
+                clientDB.Sex = (int)clientDialog.Sex;
+                clientDB.BirthDate = clientDialog.BirthDate.ToLongDateString();
+                clientDB.DiagnosisIds = clientDialog.Diagnosis.Select(v => v.Id.ToString()).ToArray();
+
+                await db.Clients.Put(clientDB);
+                Snackbar.Add("Клиент обновлён");
+
+                await LoadClients();
+            }
+            else
+            {
+                await db.Events.BulkDelete((await db.Events.Where("ClientId").IsEqual(client.Id).ToList()).Select(var=>var.Id));
+                await db.Clients.Delete(client.Id);
+                
+                Snackbar.Add("Клиент удалён");
+                await LoadClients();
+            }
+        }
+    }
+
+
+    public bool IsVisible(ClientData data)
+    {
+        if (string.IsNullOrEmpty(Filter))
+            return true;
+
+        double tolerance = 0.7;
+
+        var userInput = Filter.ToLower();
+        if (data.Name.ToLower().Contains(userInput) || data.Name.ToLower().Split(' ').Any(name => Utils.CalculateSimilarity(name, userInput) >= tolerance))
+            return true;
+
+        if (data.CardNumber.Contains(Filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (GetSexName(data.Sex).ToLower().Contains(userInput) || Utils.CalculateSimilarity(GetSexName(data.Sex).ToLower(), userInput) >= tolerance)
+            return true;
+
+        if (data.Diagnosis.Any(x => x.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase) || x.Name.ToLower().Split(' ').Any(name => Utils.CalculateSimilarity(name, userInput) >= tolerance)))
+            return true;
+
+        if (data.Diagnosis.Any(x => x.Code.Contains(Filter, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (data.BirthDate.ToString("dd.MM.yyyy", new CultureInfo("ru-RU")).Contains(Filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    public string Filter { get; set; } = string.Empty;
+
+
+
+
+    private string GetSexName(Sex sex)
+    {
+        switch (sex)
+        {
+            case Sex.Male:
+                return "Мужской";
+            case Sex.Female:
+                return "Женский";
+            default:
+                return "Нет информации";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await LocalStorageAccessor.GetValueAsync<string>("isSecondRun") != "true")
+        {
+            Navigation.NavigateTo("start", true);
+        }
+        else
+        {
+            await LoadClients();
+        }
+    }
+
+    private async Task LoadClients()
+    {
+        var moduleFactory = new EsModuleFactory(JS);
+        var db = new DatabaseContext(moduleFactory);
+
+        var diags = (await db.DiagnosisNames.ToList());
+
+        clients = (await db.Clients.ToArray()).Select(v => new ClientData()
+        {
+            Id = v.Id,
+            CardNumber = v.CardNumber,
+            Name = v.Name,
+            Diagnosis = v.DiagnosisIds.Select(r => diags.First(d => d.Id == int.Parse(r))).ToList(),
+            Sex = v.Sex == 0 ? Sex.Male : Sex.Female,
+            BirthDate = DateTime.Parse(v.BirthDate),
+        }).ToArray();
+    }
+
+    private async Task OpenClientCalendar(ClientData client)
+    {
+        Navigation.NavigateTo($"#clientID={client.Id}", true);
+    }
+
+}
