@@ -1,0 +1,99 @@
+﻿@inherits LayoutComponentBase
+
+@inject LocalStorageAccessor LocalStorageAccessor
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IDialogService DialogService
+
+@using Toolbelt.Blazor.PWA.Updater;
+
+<MudThemeProvider/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<PWAUpdater Text="Ваша версия приложения устарела!" ButtonCaption="ОБНОВИТЬ" />
+
+<MudLayout id="top_identifier" style="height:100vh;overflow: auto;">
+
+    @if (!Navigation.Uri.ToString().Contains("/start") && isSecondRun == "true")
+    {
+        <MudAppBar>
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())"/>
+
+            <MudText Typo="Typo.h6">Тетрамо.рф</MudText>
+            <MudSpacer/>
+            @if (cloudSyncSupported)
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.CloudSync" Variant="Variant.Filled" Color="Color.Info" Disabled="@_processing" OnClick="ProcessSomething">
+                    @if (_processing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                        <MudText Class="ms-2">Обновляем...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Cинхронизировать</MudText>
+                    }
+                </MudButton>
+            }
+            
+        </MudAppBar>
+        <MudDrawer @bind-Open="@_drawerOpen">
+            <MainNavMenu/>
+        </MudDrawer>
+    }
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+    <MudScrollToTop
+        TopOffset="100"
+        Selector="#top_identifier"
+        VisibleCssClass="visible"
+        HiddenCssClass="invisible">
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.ArrowUpward" Color="Color.Info">Вверх</MudButton>
+    </MudScrollToTop>
+</MudLayout>
+
+@code
+{
+    bool _drawerOpen = true;
+    
+    bool cloudSyncSupported = false;
+    
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    string isSecondRun = "false";
+
+    protected override async Task OnInitializedAsync()
+    {
+        isSecondRun = await LocalStorageAccessor.GetValueAsync<string>("isSecondRun");
+
+        if (await IsMobile())
+        {
+            await DialogService.ShowMessageBox(new MessageBoxOptions() { YesText = "Понятно", CancelText = "Отмена", Title = "Внимание!", Message = "Приложение не поддерживает мобильные телефоны в полной мере. Лучший опыт использования может быть достигнут на компьютере." });
+        }
+    }
+
+    private bool _processing = false;
+
+    async Task ProcessSomething()
+    {
+        _processing = true;
+        await Task.Delay(2000);
+        _processing = false;
+
+        Navigation.Refresh(true);
+    }
+
+    async Task<bool> IsMobile()
+    {
+        return await JS.InvokeAsync<bool>("isMobile");
+    }
+}

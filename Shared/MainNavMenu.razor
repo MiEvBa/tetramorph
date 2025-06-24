@@ -1,0 +1,23 @@
+﻿@inherits LayoutComponentBase
+
+@inject NavigationManager Navigation
+<MudNavMenu>
+    <MudNavLink Href="@indexPage" Match="NavLinkMatch.All">События</MudNavLink>
+    <MudNavLink Href="@clientsPage" Match="NavLinkMatch.Prefix">Клиенты</MudNavLink>
+    <MudNavLink Href="@settingsPage" Match="NavLinkMatch.Prefix">Настройки</MudNavLink>
+</MudNavMenu>
+
+@code {
+
+    string indexPage = null;
+    string settingsPage = null;
+    string clientsPage = null;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        indexPage = Navigation.BaseUri + "";
+        settingsPage = Navigation.BaseUri + ("settings");
+        clientsPage  = Navigation.BaseUri + ("clients");
+    }
+
+}
